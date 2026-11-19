@@ -121,7 +121,7 @@ case "$1" in
     ;;
 # ----------------------------------------------------- daemon lifecycle ----
   start)   vddb_start   >/dev/null 2>&1; exec sh "$0" status ;;
-  stop)    vddb_stop    >/dev/null 2>&1; exec sh "$0" status ;;
+  stop)    vddb_stop_all >/dev/null 2>&1; exec sh "$0" status ;;
   restart) vddb_restart >/dev/null 2>&1; exec sh "$0" status ;;
 # -------------------------------------------------------- authorized keys ----
   list-keys)

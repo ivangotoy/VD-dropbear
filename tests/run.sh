@@ -271,6 +271,43 @@ t_webui_lifecycle_verbs() {
     expect_eq "$rc" 0 || return 1
     expect_has "$s" "running=0"
 }
+# F1: a restart replaces the listener only; open sessions (children with the same
+# process name) survive it, status reports the listener, and WebUI Stop ends both.
+t_restart_keeps_sessions() {
+    cfg PORT=2299
+    echo 1 > "$FAKE/sessions"
+    sh "$MOD/action.sh" >/dev/null
+    wait_for '[ -s "$FAKE/session-pids" ]' || { fail "no session spawned"; return 1; }
+    l1=$(listener); s1=$(cat "$FAKE/session-pids")
+    echo 0 > "$FAKE/sessions"
+    sh "$MOD/action.sh" >/dev/null
+    wait_for '[ "$(listener)" != "$l1" ]' || { fail "no new listener"; return 1; }
+    l2=$(listener)
+    wait_for '! alive "$l1"' || { fail "old listener alive"; return 1; }
+    alive "$s1" || { fail "restart killed the open session"; return 1; }
+    sh "$MOD/action.sh" >/dev/null
+    wait_for '[ "$(listener)" != "$l2" ]' || { fail "no third listener"; return 1; }
+    l3=$(listener)
+    wait_for '! alive "$l2"' || { fail "second restart missed the listener"; return 1; }
+    alive "$s1" || { fail "second restart killed the open session"; return 1; }
+    expect_has "$(webui status)" "pid=$l3
+" || return 1
+    s=$(webui stop)
+    expect_has "$s" "running=0" || return 1
+    wait_for '[ -z "$(fake_pids)" ]' || fail "stop left processes"
+}
+# F1: a stale pid record (daemon died at bind, pid reused by another process) is ignored
+t_stale_pidfile() {
+    cfg PORT=2299
+    sleep 30 & other=$!
+    echo "$other" > "$DATA/state/daemon.pid"
+    expect_has "$(webui status)" "running=0" || { kill "$other"; return 1; }
+    sh "$MOD/action.sh" >/dev/null
+    wait_for '[ -n "$(listener)" ]' || { kill "$other"; fail "no start"; return 1; }
+    kill -0 "$other" 2>/dev/null || { fail "stop killed an unrelated process"; return 1; }
+    kill "$other"
+    expect_eq "$(cat "$DATA/state/daemon.pid")" "$(listener)"
+}
 t_disabled_not_started() {
     cfg ENABLED=0
     out=$(sh "$MOD/action.sh")
@@ -320,7 +357,7 @@ t_uninstall() {
 
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_keys t_webui_passwords t_webui_status
-t_action_start t_action_restart_single_instance t_webui_lifecycle_verbs t_disabled_not_started t_service_afu_bfu
+t_action_start t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_stale_pidfile t_disabled_not_started t_service_afu_bfu
 t_service_disabled t_customize t_uninstall"
 
 for c in $CASES; do run_case "$c"; done
