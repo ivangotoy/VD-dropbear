@@ -252,7 +252,8 @@ vddb_export_env() {
         unset DROPBEAR_AUTHKEYS
     fi
     export DROPBEAR_PASSWD_FILE="$_sdir/passwd"         # honoured by the VD patch
-    [ "$HIDE_IDENT" = "1" ] && export DROPBEAR_IDENT="${IDENT_STRING:-SSH-2.0-}"
+    # unset when off: a restart from an SSH session inherits the old value (-e)
+    if [ "$HIDE_IDENT" = "1" ]; then export DROPBEAR_IDENT="${IDENT_STRING:-SSH-2.0-}"; else unset DROPBEAR_IDENT; fi
     [ -n "$LOGIN_SHELL" ] && export SHELL="$LOGIN_SHELL"
     # extra "K=V;K2=V2" pairs
     if [ -n "$EXTRA_ENV" ]; then

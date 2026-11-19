@@ -116,7 +116,7 @@ args_for() { cfg "$@"; (MODDIR=$MOD; . "$MOD/common/vddropbear.sh"; vddb_load_co
 fail() { echo "    $*"; return 1; }
 expect_eq() { [ "$1" = "$2" ] || fail "expected [$2] got [$1]"; }
 expect_has() { case "$1" in *"$2"*) return 0 ;; esac; fail "missing [$2]"; }
-expect_not() { case "$1" in *"$2"*) fail "unexpected [$2] in [$1]" ;; esac; return 0; }
+expect_not() { case "$1" in *"$2"*) fail "unexpected [$2]"; return 1 ;; esac; return 0; }
 
 run_case() {
     _name=$1
@@ -325,6 +325,14 @@ t_action_start() {
     expect_eq "$(mode_of "$ROOT/dev/vddropbear")" "drwx------" || return 1
     [ -L "$DATA/bin/scp" ] || fail "tools not linked"
 }
+# A restart run from an SSH session (daemon env passed on with -e) must not keep
+# the old banner once HIDE_IDENT is off
+t_ident_not_inherited() {
+    cfg HIDE_IDENT=0
+    DROPBEAR_IDENT=SSH-2.0-oldbanner sh "$MOD/action.sh" >/dev/null
+    wait_for '[ -s "$FAKE/env.$(listener)" ]' || { fail "no start"; return 1; }
+    expect_not "$(cat "$FAKE/env.$(listener)")" "DROPBEAR_IDENT"
+}
 t_action_restart_single_instance() {
     cfg PORT=2299
     sh "$MOD/action.sh" >/dev/null
@@ -462,7 +470,7 @@ t_uninstall() {
 
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_write_failure t_bfu_toggle_moves_secrets t_webui_status
-t_action_start t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_stale_pidfile t_disabled_not_started t_disable_stops_running t_service_afu_bfu
+t_action_start t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_stale_pidfile t_disabled_not_started t_disable_stops_running t_service_afu_bfu
 t_service_disabled t_customize t_uninstall"
 
 for c in $CASES; do run_case "$c"; done
