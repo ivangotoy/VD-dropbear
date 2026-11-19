@@ -258,9 +258,9 @@ vddb_export_env() {
     [ -n "$LOGIN_SHELL" ] && export SHELL="$LOGIN_SHELL"
     # extra "K=V;K2=V2" pairs
     if [ -n "$EXTRA_ENV" ]; then
-        _IFS="$IFS"; IFS=';'
+        _IFS="$IFS"; IFS=';'; set -f   # split on ';' only, no glob expansion
         for _kv in $EXTRA_ENV; do [ -n "$_kv" ] && export "$_kv"; done
-        IFS="$_IFS"
+        set +f; IFS="$_IFS"
     fi
 }
 

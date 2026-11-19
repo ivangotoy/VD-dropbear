@@ -369,6 +369,14 @@ t_log_rotated() {
     sh "$MOD/action.sh" >/dev/null
     [ "$(wc -c < "$DATA/state/daemon.log.1")" -ge 1126400 ] || fail "small log rotated over the old copy"
 }
+# F10: EXTRA_ENV values are taken literally, not glob-expanded against the cwd
+t_extra_env_no_glob() {
+    cfg "EXTRA_ENV='FOO=*'"
+    mkdir -p "$W/cwd"; : > "$W/cwd/FOO=expanded"
+    (cd "$W/cwd" && sh "$MOD/action.sh" >/dev/null)
+    wait_for '[ -s "$FAKE/env.$(listener)" ]' || { fail "no start"; return 1; }
+    expect_has "$(cat "$FAKE/env.$(listener)")" "FOO=*"
+}
 t_ident_not_inherited() {
     cfg HIDE_IDENT=0
     DROPBEAR_IDENT=SSH-2.0-oldbanner sh "$MOD/action.sh" >/dev/null
@@ -538,7 +546,7 @@ t_uninstall() {
 
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_write_failure t_bfu_toggle_moves_secrets t_webui_status
-t_action_start t_empty_hostkey_regenerated t_log_rotated t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
+t_action_start t_empty_hostkey_regenerated t_log_rotated t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
 t_service_disabled t_customize t_uninstall"
 
 for c in $CASES; do run_case "$c"; done
