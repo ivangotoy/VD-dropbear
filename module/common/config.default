@@ -47,6 +47,8 @@ ENABLED=1
 #       but the host key + authorized_keys + password hash then live on
 #       device-encrypted storage (/data/adb), readable before unlock. This is a
 #       deliberate exposure trade-off; only enable it if you need pre-unlock SSH.
+#   Switching it in the WebUI moves the secrets to the other store; a hand edit
+#   of this file does not.
 START_IN_BFU=0
 
 # --- Network ---------------------------------------------------------------
@@ -70,7 +72,8 @@ LISTEN_ADDRESSES=
 # server/version (the SSH protocol requires *some* banner, so it cannot be
 # removed entirely, only made uninformative).
 HIDE_IDENT=1
-# Custom banner. Empty = a neutral "SSH-2.0-" with no product or version.
+# Custom banner: SSH-2.0-<text>, no spaces, no "-" in <text>, under 64 characters.
+# Empty (or invalid) = the neutral built-in "SSH-2.0-ssh". HIDE_IDENT=0 sends that too.
 IDENT_STRING=
 
 # --- Authentication --------------------------------------------------------

@@ -39,7 +39,8 @@ specific is runtime config or a secret.
   resolve the secret store, ensure a host key, build the Dropbear argument vector, and manage a single
   daemon instance (start / stop / status / restart).
 - `module/service.sh`: boot entry. Honours the BFU/AFU start policy; in AFU mode it waits for
-  credential-encrypted storage to unlock without stalling boot.
+  credential-encrypted storage to unlock without stalling boot (up to 15 minutes after boot; after
+  that, start it from the WebUI or the Action button).
 - `module/action.sh` is the manager's **Action** button: (re)launch the daemon. It never reads stdin
   and detaches the daemon into its own session, so the manager does not hang.
 - `module/common/vddb-webui.sh` + `module/webroot/index.html`: the WebUI backend and page.
@@ -51,7 +52,9 @@ specific is runtime config or a secret.
 `vddb_start` loads the config, stops any running instance, ensures a host key exists, then spawns one
 daemon. The binary is shipped as `vddropbear`, so its process name matches `pgrep -x` exactly (Android
 `mksh` has no `exec -a`). It is launched with `setsid` so it detaches from the caller's process group,
-which is what keeps the manager's Action from blocking.
+which is what keeps the manager's Action from blocking. Dropbear forks one child per connection and
+the children keep that name, so the listener's pid is recorded in `state/daemon.pid` at spawn: a
+restart stops only that pid and open SSH sessions survive it, while the WebUI's **Stop** also ends them.
 
 ## The secret store (CE vs DE, BFU vs AFU)
 

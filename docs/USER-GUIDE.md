@@ -102,13 +102,17 @@ If `192.168.42.129` is not the address on your device, check the phone's USB int
 
 By default the daemon starts only **after** you unlock the device once (AFU), because its secrets live
 on credential-encrypted storage. If you need SSH **before** first unlock (for example to unlock a
-device remotely after a reboot), turn on **Start before first unlock (BFU)**. The secrets then move to
+device remotely after a reboot), turn on **Start before first unlock (BFU)** in the WebUI. The secrets then move to
 device-encrypted storage, which is readable before unlock: a deliberate, documented trade-off. See
 [Security model](#) in the README.
+
+At boot the daemon waits up to 15 minutes for that first unlock. If you unlock later, start it with
+**Start** in the WebUI or the manager's **Action** button.
 
 ## 7. Controlling the daemon
 
 - **WebUI:** Start / Stop / Restart, and live status (running, PID, port, mode, host-key fingerprint).
+  **Restart** (and **Save & restart**) keeps open SSH sessions; **Stop** also ends them.
 - **Manager Action button:** (re)launches the daemon.
 - It also starts automatically at boot (unless you disable it).
 

@@ -41,8 +41,8 @@ Apply changes by restarting the daemon (the WebUI's **Save & restart** does this
 | Key | Default | Meaning |
 |-----|---------|---------|
 | `ENABLED` | `1` | Start the daemon at boot. `0` disables it entirely. |
-| `START_IN_BFU` | `0` | `0`: start only after first unlock (AFU); secrets stay on credential-encrypted (CE) storage. `1`: also start before first unlock (BFU); secrets move to device-encrypted (DE) storage, readable before unlock. |
-| `PORT` | `2222` | Default listening port (per-bind ports can override it in `LISTEN_ADDRESSES`). |
+| `START_IN_BFU` | `0` | `0`: start only after first unlock (AFU); secrets stay on credential-encrypted (CE) storage. `1`: also start before first unlock (BFU); secrets move to device-encrypted (DE) storage, readable before unlock. Switching it in the WebUI moves the host key, `authorized_keys` and `passwd` to the other store (with the device unlocked; a file already in the target store is kept). A hand edit of this file moves nothing. |
+| `PORT` | `2222` | Default listening port (per-bind ports can override it in `LISTEN_ADDRESSES`). The WebUI accepts 1-65535 only. |
 
 ## Listening / binds (composable)
 
@@ -65,8 +65,8 @@ loopback rather than every interface.
 
 | Key | Default | Meaning |
 |-----|---------|---------|
-| `HIDE_IDENT` | `1` | Send a neutral SSH identity banner so scanners cannot fingerprint the exact server/version. |
-| `IDENT_STRING` | `""` | A custom identity string. Empty uses the neutral built-in default. |
+| `HIDE_IDENT` | `1` | Send a neutral SSH identity banner so scanners cannot fingerprint the exact server/version. `0` only stops passing `IDENT_STRING`: the patched binary has no product/version banner and sends its neutral built-in `SSH-2.0-ssh`. |
+| `IDENT_STRING` | `""` | A custom identity string, used when `HIDE_IDENT=1`. It must start with `SSH-2.0-`, be shorter than 64 characters and have no spaces and no `-` after that prefix; otherwise, or when empty, the neutral built-in `SSH-2.0-ssh` is sent. |
 
 ## Authentication
 
