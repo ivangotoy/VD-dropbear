@@ -120,9 +120,9 @@ case "$1" in
     echo "ok"
     ;;
 # ----------------------------------------------------- daemon lifecycle ----
-  start)   vddb_start   >/dev/null 2>&1; exec "$0" status ;;
-  stop)    vddb_stop    >/dev/null 2>&1; exec "$0" status ;;
-  restart) vddb_restart >/dev/null 2>&1; exec "$0" status ;;
+  start)   vddb_start   >/dev/null 2>&1; exec sh "$0" status ;;
+  stop)    vddb_stop    >/dev/null 2>&1; exec sh "$0" status ;;
+  restart) vddb_restart >/dev/null 2>&1; exec sh "$0" status ;;
 # -------------------------------------------------------- authorized keys ----
   list-keys)
     _f="$(vddb_secret_dir)/authorized_keys"

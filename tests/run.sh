@@ -258,6 +258,19 @@ t_action_restart_single_instance() {
     wait_for '! alive "$p1"' || { fail "old daemon still alive"; return 1; }
     expect_eq "$(fake_pids | wc -l | tr -d ' ')" 1
 }
+# F2: start/stop/restart re-run the backend for status; the shipped file is not executable (0644)
+t_webui_lifecycle_verbs() {
+    cfg PORT=2299
+    expect_eq "$(mode_of "$WEBUI")" "-rw-r--r--" || return 1
+    s=$(webui start); rc=$?
+    expect_eq "$rc" 0 || return 1
+    expect_has "$s" "port=2299" || return 1
+    wait_for '[ -n "$(listener)" ]' || { fail "start did not spawn"; return 1; }
+    s=$(webui restart); expect_has "$s" "port=2299" || return 1
+    s=$(webui stop); rc=$?
+    expect_eq "$rc" 0 || return 1
+    expect_has "$s" "running=0"
+}
 t_disabled_not_started() {
     cfg ENABLED=0
     out=$(sh "$MOD/action.sh")
@@ -307,7 +320,7 @@ t_uninstall() {
 
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_keys t_webui_passwords t_webui_status
-t_action_start t_action_restart_single_instance t_disabled_not_started t_service_afu_bfu
+t_action_start t_action_restart_single_instance t_webui_lifecycle_verbs t_disabled_not_started t_service_afu_bfu
 t_service_disabled t_customize t_uninstall"
 
 for c in $CASES; do run_case "$c"; done
