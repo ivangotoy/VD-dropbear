@@ -49,6 +49,17 @@ module (`module.prop`) and on GitHub Releases.
 - Network-type classification now handles IPv6-only Wi-Fi (464XLAT) correctly, so such a link is no longer
   misread as mobile data.
 
+### Fixed (Forgejo fork build)
+- Restart (WebUI, Action) replaces only the listening daemon; open SSH sessions stay up. WebUI Stop still ends
+  them. The daemon pid is recorded in `state/daemon.pid`; overlapping starts end with one recorded daemon.
+- WebUI Start/Stop/Restart print the status again (they failed with exit 126 on a non-executable script).
+- A last `authorized_keys` or `passwd` line without a newline is no longer dropped or merged by the WebUI.
+- Failed key and password rewrites answer `err: write failed` / `err: install failed` instead of `ok`.
+- Switching START_IN_BFU in the WebUI moves the host keys, `authorized_keys` and `passwd` to the other store.
+- Saving with ENABLED=0 stops the running daemon; an inherited banner is dropped when HIDE_IDENT is off.
+- A PORT outside 1-65535 is refused on save (`err: bad PORT`); an empty host key file is regenerated.
+- `daemon.log` is moved to `daemon.log.1` at start once it passes 1 MiB; EXTRA_ENV values are not glob-expanded.
+
 ## [v1.08] (2026-11-17)
 
 ### Fixed
