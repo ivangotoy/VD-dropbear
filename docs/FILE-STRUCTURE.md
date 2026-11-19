@@ -62,6 +62,8 @@ UPSTREAM_VERSION            the pinned upstream Dropbear tag
 /data/adb/vddropbear/
   config                    the live configuration you (or the WebUI) edit
   state/daemon.log          the daemon log
+  state/daemon.log.1        the previous log (moved there at start once the log passes 1 MiB)
+  state/daemon.pid          pid of the listening daemon (sessions are its children)
   secret/                   secrets, ONLY when START_IN_BFU=1 (device-encrypted)
 
 /data/misc_ce/0/vddropbear/
