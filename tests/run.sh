@@ -456,6 +456,13 @@ t_disable_stops_running() {
     expect_has "$s" "running=0" || return 1
     wait_for '! alive "$l1"' || fail "disabled daemon still running"
 }
+# F6: logging without a state dir (install not run yet) must not print errors
+t_log_without_state_dir() {
+    cfg ENABLED=0
+    rm -rf "$DATA/state"
+    err=$(sh "$MOD/action.sh" 2>&1 >/dev/null)
+    expect_eq "$err" ""
+}
 t_service_afu_bfu() {
     sh "$MOD/service.sh"
     expect_eq "$(sed -n 's/^PORT=//p' "$DATA/config")" 2222 || return 1
@@ -499,7 +506,7 @@ t_uninstall() {
 
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_write_failure t_bfu_toggle_moves_secrets t_webui_status
-t_action_start t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_disabled_not_started t_disable_stops_running t_service_afu_bfu
+t_action_start t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
 t_service_disabled t_customize t_uninstall"
 
 for c in $CASES; do run_case "$c"; done

@@ -70,7 +70,7 @@ VDDB_DE_SECRET="$VDDB_DATA/secret"          # used only when START_IN_BFU=1
 VDDB_CE_SECRET="$VDDB_ROOT/data/misc_ce/0/$VDDB_NAME/secret"
 
 # --- small helpers ---------------------------------------------------------
-vddb_log() { echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$VDDB_LOG" 2>/dev/null; }
+vddb_log() { echo "$(date '+%Y-%m-%d %H:%M:%S') $*" 2>/dev/null >> "$VDDB_LOG"; }
 
 # True once user 0's credential-encrypted storage is available (i.e. after unlock).
 vddb_ce_ready() { [ "$(getprop sys.user.0.ce_available 2>/dev/null)" = "true" ]; }
