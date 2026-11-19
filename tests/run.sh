@@ -261,6 +261,34 @@ t_webui_write_failure() {
     expect_has "$out" "err: " || return 1
     [ "$rc" != 0 ] || fail "set-config: exit 0 on error"
 }
+# F5: switching START_IN_BFU in the WebUI moves the secrets to the other store,
+# never overwrites a secret already there, and a plain start moves nothing
+t_bfu_toggle_moves_secrets() {
+    h='pbkdf2-sha256$600000$00112233$0011223344556677889900112233445566778899001122334455667788990011'
+    expect_eq "$(webui_in "ssh-ed25519 AAAAexample1 one@example" add-key)" ok || return 1
+    expect_eq "$(webui_in "$h" set-pw root)" ok || return 1
+    printf 'FAKEKEY ed25519\n' > "$CE/hostkey_ed25519"; chmod 600 "$CE/hostkey_ed25519"
+    expect_eq "$(webui_in "$(printf 'START_IN_BFU=1\nPORT=2299')" set-config)" ok || return 1
+    for f in authorized_keys passwd hostkey_ed25519; do
+        [ -f "$DE/$f" ] || { fail "$f not moved to DE"; return 1; }
+        [ ! -e "$CE/$f" ] || { fail "$f left in CE"; return 1; }
+        expect_eq "$(mode_of "$DE/$f")" "-rw-------" || return 1
+    done
+    expect_eq "$(mode_of "$DE")" "drwx------" || return 1
+    expect_eq "$(webui list-keys | cut -f2 | base64 -d)" "ssh-ed25519 AAAAexample1 one@example" || return 1
+    # a key already in the target store wins; the other copy stays where it was
+    mkdir -p "$CE"; printf 'ssh-rsa AAAAexample2 two@example\n' > "$CE/authorized_keys"
+    expect_eq "$(webui_in "$(printf 'START_IN_BFU=0\nPORT=2299')" set-config)" ok || return 1
+    expect_eq "$(cat "$CE/authorized_keys")" "ssh-rsa AAAAexample2 two@example" || return 1
+    expect_eq "$(cat "$DE/authorized_keys")" "ssh-ed25519 AAAAexample1 one@example" || return 1
+    [ -f "$CE/passwd" ] && [ ! -e "$DE/passwd" ] || { fail "passwd not moved back"; return 1; }
+    # same mode saved again, and a start: nothing moves
+    printf 'ssh-ed25519 AAAAdormant x@example\n' > "$DE/authorized_keys"
+    expect_eq "$(webui_in "$(printf 'START_IN_BFU=0\nPORT=2299')" set-config)" ok || return 1
+    sh "$MOD/action.sh" >/dev/null
+    expect_eq "$(cat "$CE/authorized_keys")" "ssh-rsa AAAAexample2 two@example" || return 1
+    [ -f "$DE/authorized_keys" ] || fail "dormant DE key touched"
+}
 t_webui_status() {
     cfg PORT=2299
     s=$(webui status)
@@ -422,7 +450,7 @@ t_uninstall() {
 }
 
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
-t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_write_failure t_webui_status
+t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_write_failure t_bfu_toggle_moves_secrets t_webui_status
 t_action_start t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_stale_pidfile t_disabled_not_started t_service_afu_bfu
 t_service_disabled t_customize t_uninstall"
 

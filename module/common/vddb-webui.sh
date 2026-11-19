@@ -124,6 +124,14 @@ case "$1" in
     grep -q '^[A-Z]' "$_new" || { rm -f "$_new"; die "no valid keys"; }
     mv "$_new" "$VDDB_CONFIG" 2>/dev/null || { rm -f "$_new"; die "install failed"; }
     chmod 600 "$VDDB_CONFIG" 2>/dev/null
+    # START_IN_BFU switched: the secrets follow it to the other store
+    _was_bfu=0; [ "$START_IN_BFU" = "1" ] && _was_bfu=1
+    vddb_load_config
+    _now_bfu=0; [ "$START_IN_BFU" = "1" ] && _now_bfu=1
+    if [ "$_was_bfu" != "$_now_bfu" ]; then
+      if [ "$_now_bfu" = 1 ]; then vddb_move_secrets "$VDDB_CE_SECRET" "$VDDB_DE_SECRET"
+      else vddb_move_secrets "$VDDB_DE_SECRET" "$VDDB_CE_SECRET"; fi
+    fi
     echo "ok"
     ;;
 # ----------------------------------------------------- daemon lifecycle ----

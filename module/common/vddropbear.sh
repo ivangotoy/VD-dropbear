@@ -131,6 +131,27 @@ vddb_secret_dir() {
     fi
 }
 
+# Move the secrets (host keys, authorized_keys, passwd) from store $1 to store $2
+# when START_IN_BFU is switched from the WebUI. Needs CE storage unlocked. A file
+# that already exists in $2 is kept and its counterpart stays in $1; each moved
+# file is copied to a 0600 temp in $2, renamed there, then removed from $1.
+vddb_move_secrets() {
+    vddb_ce_ready || { vddb_log "secrets not moved: CE storage is locked"; return 1; }
+    [ -d "$1" ] || return 0
+    mkdir -p "$2" 2>/dev/null; chmod 700 "$2" 2>/dev/null
+    for _s in "$1"/hostkey_* "$1/authorized_keys" "$1/passwd"; do
+        [ -f "$_s" ] || continue
+        _t="$2/${_s##*/}"
+        if [ -e "$_t" ]; then vddb_log "secret store: kept $_t, left $_s"; continue; fi
+        if cp "$_s" "$_t.tmp.$$" 2>/dev/null && chmod 600 "$_t.tmp.$$" 2>/dev/null \
+            && mv -f "$_t.tmp.$$" "$_t" 2>/dev/null; then
+            rm -f "$_s"; vddb_log "secret store: moved $_s to $_t"
+        else
+            rm -f "$_t.tmp.$$"; vddb_log "secret store: could not move $_s"
+        fi
+    done
+}
+
 # --- host key --------------------------------------------------------------
 vddb_hostkey_path() { echo "$(vddb_secret_dir)/hostkey_${HOSTKEY_TYPE}"; }
 
