@@ -374,7 +374,7 @@ async function loadKeys(){
     const label=key.length>54?key.slice(0,28)+"…"+key.slice(-16):key;
     return `<li><span class="mono">${esc(label)}</span><button class="danger ghost" data-del="${idx}">Remove</button></li>`;
   }).join("");
-  ul.querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{ await api("del-key",b.dataset.del); toast("Key removed"); loadKeys(); });
+  ul.querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{ const out=await api("del-key",b.dataset.del); if(out.trim().startsWith("err")) toast(out.trim(),true); else toast("Key removed"); loadKeys(); });
 }
 async function addKey(){
   const v=$("#newKey").value.trim(); if(!v){ toast("Paste a public key",true); return; }
@@ -391,7 +391,7 @@ async function loadPw(){
   ul.innerHTML=rows.map(r=>{ const u=b64dec(r);
     return `<li><span class="mono">${esc(u)}</span><button class="danger ghost" data-u="${esc(u)}">Remove</button></li>`;
   }).join("");
-  ul.querySelectorAll("[data-u]").forEach(b=>b.onclick=async()=>{ await api("del-pw",b.dataset.u); toast("Account removed"); loadPw(); });
+  ul.querySelectorAll("[data-u]").forEach(b=>b.onclick=async()=>{ const out=await api("del-pw",b.dataset.u); if(out.trim().startsWith("err")) toast(out.trim(),true); else toast("Account removed"); loadPw(); });
 }
 function scorePw(p){
   let s=0; if(p.length>=8)s++; if(p.length>=12)s++; if(p.length>=16)s++;

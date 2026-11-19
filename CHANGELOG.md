@@ -63,6 +63,8 @@ module (`module.prop`) and on GitHub Releases.
   FAILED / Stopped while the daemon is still starting.
 - The WebUI passes its arguments (key index, account name) to the shell single-quoted, so an account name read
   from a hand-edited `passwd` file is never run as a command.
+- Removing a key or password account in the WebUI shows the backend's error instead of "removed" when the
+  rewrite fails.
 
 ## [v1.08] (2026-11-17)
 
