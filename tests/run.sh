@@ -232,6 +232,35 @@ t_webui_unterminated_last_line() {
     expect_eq "$(webui del-pw root)" ok || return 1
     expect_eq "$(cut -d: -f1 "$CE/passwd" | tr '\n' ' ')" "shell "
 }
+# F4: a failed rewrite reports an error, keeps the old file and leaves no temp file
+t_webui_write_failure() {
+    [ "$(id -u)" = 0 ] && return 77
+    h='pbkdf2-sha256$600000$00112233$0011223344556677889900112233445566778899001122334455667788990011'
+    expect_eq "$(webui_in "ssh-ed25519 AAAAexample1 one@example" add-key)" ok || return 1
+    expect_eq "$(webui_in "$h" set-pw root)" ok || return 1
+    k=$(cat "$CE/authorized_keys"); p=$(cat "$CE/passwd")
+    chmod 500 "$CE"
+    for v in "del-key 1" "del-pw root"; do
+        out=$(webui_in "$h" $v 2>/dev/null); rc=$?
+        expect_has "$out" "err: " || { chmod 700 "$CE"; return 1; }
+        [ "$rc" != 0 ] || { chmod 700 "$CE"; fail "$v: exit 0 on error"; return 1; }
+    done
+    chmod 700 "$CE"
+    # set-pw re-asserts the dir mode itself; make the current file unreadable instead
+    chmod 000 "$CE/passwd"
+    out=$(webui_in "$h" set-pw shell 2>/dev/null); rc=$?
+    chmod 600 "$CE/passwd"
+    expect_has "$out" "err: " || return 1
+    [ "$rc" != 0 ] || { fail "set-pw: exit 0 on error"; return 1; }
+    expect_eq "$(cat "$CE/authorized_keys")" "$k" || return 1
+    expect_eq "$(cat "$CE/passwd")" "$p" || return 1
+    expect_eq "$(ls "$CE" | grep -c tmp)" 0 || return 1
+    chmod 500 "$DATA"
+    out=$(webui_in "PORT=2299" set-config 2>/dev/null); rc=$?
+    chmod 700 "$DATA"
+    expect_has "$out" "err: " || return 1
+    [ "$rc" != 0 ] || fail "set-config: exit 0 on error"
+}
 t_webui_status() {
     cfg PORT=2299
     s=$(webui status)
@@ -393,7 +422,7 @@ t_uninstall() {
 }
 
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
-t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_status
+t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_write_failure t_webui_status
 t_action_start t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_stale_pidfile t_disabled_not_started t_service_afu_bfu
 t_service_disabled t_customize t_uninstall"
 

@@ -53,6 +53,13 @@ _secret_ready() {
     echo "$_d"
 }
 
+# Replace a secret file with its rewritten temp copy: 0600 before it takes the
+# real name; on failure the temp file is removed and the verb fails.
+_install() {
+    chmod 600 "$1" 2>/dev/null
+    mv -f "$1" "$2" 2>/dev/null || { rm -f "$1"; die "install failed"; }
+}
+
 # --- config whitelist ------------------------------------------------------
 # Only these keys may be written. Everything else from the UI is dropped.
 VDDB_KEYS="ENABLED START_IN_BFU PORT LISTEN_LOOPBACK LISTEN_ALL LISTEN_IPV4 \
@@ -112,10 +119,10 @@ case "$1" in
         _v=$(printf '%s' "$_v" | tr -d '\r')
         printf '%s=%s\n' "$_k" "$(_sq "$_v")"
       done
-    } > "$_new" 2>/dev/null || die "write failed"
+    } > "$_new" 2>/dev/null || { rm -f "$_new"; die "write failed"; }
     # must contain at least one real key or we refuse to clobber the config
     grep -q '^[A-Z]' "$_new" || { rm -f "$_new"; die "no valid keys"; }
-    mv "$_new" "$VDDB_CONFIG" 2>/dev/null || die "install failed"
+    mv "$_new" "$VDDB_CONFIG" 2>/dev/null || { rm -f "$_new"; die "install failed"; }
     chmod 600 "$VDDB_CONFIG" 2>/dev/null
     echo "ok"
     ;;
@@ -161,8 +168,8 @@ case "$1" in
     while IFS= read -r _line || [ -n "$_line" ]; do
       _i=$((_i+1)); [ "$_i" = "$_idx" ] && continue
       printf '%s\n' "$_line"
-    done < "$_f" > "$_tmp"
-    mv "$_tmp" "$_f" 2>/dev/null && chmod 600 "$_f" 2>/dev/null
+    done < "$_f" > "$_tmp" || { rm -f "$_tmp"; die "write failed"; }
+    _install "$_tmp" "$_f"
     echo "ok"
     ;;
 # ----------------------------------------------------------- passwords ----
@@ -194,12 +201,12 @@ case "$1" in
       while IFS= read -r _line || [ -n "$_line" ]; do
         case "$_line" in "$_user":*) continue ;; esac
         printf '%s\n' "$_line"
-      done < "$_f" > "$_tmp"
+      done < "$_f" > "$_tmp" || { rm -f "$_tmp"; die "write failed"; }
     else
-      : > "$_tmp"
+      : > "$_tmp" || { rm -f "$_tmp"; die "write failed"; }
     fi
-    printf '%s:%s\n' "$_user" "$_spec" >> "$_tmp"
-    mv "$_tmp" "$_f" 2>/dev/null && chmod 600 "$_f" 2>/dev/null
+    printf '%s:%s\n' "$_user" "$_spec" >> "$_tmp" || { rm -f "$_tmp"; die "write failed"; }
+    _install "$_tmp" "$_f"
     echo "ok"
     ;;
   del-pw)
@@ -210,8 +217,8 @@ case "$1" in
     while IFS= read -r _line || [ -n "$_line" ]; do
       case "$_line" in "$_user":*) continue ;; esac
       printf '%s\n' "$_line"
-    done < "$_f" > "$_tmp"
-    mv "$_tmp" "$_f" 2>/dev/null && chmod 600 "$_f" 2>/dev/null
+    done < "$_f" > "$_tmp" || { rm -f "$_tmp"; die "write failed"; }
+    _install "$_tmp" "$_f"
     echo "ok"
     ;;
   *)
