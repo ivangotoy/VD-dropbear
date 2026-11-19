@@ -104,7 +104,7 @@ case "$1" in
     {
       echo "# VD Dropbear configuration, written by the WebUI. KEY='value'."
       # Read KEY=VALUE pairs (one per line) from the base64 stdin payload.
-      unb64 | while IFS= read -r _line; do
+      unb64 | while IFS= read -r _line || [ -n "$_line" ]; do
         case "$_line" in *=*) : ;; *) continue ;; esac
         _k=${_line%%=*}; _v=${_line#*=}
         _is_key "$_k" || continue
@@ -128,7 +128,7 @@ case "$1" in
     _f="$(vddb_secret_dir)/authorized_keys"
     [ -f "$_f" ] || exit 0
     _i=0
-    while IFS= read -r _line; do
+    while IFS= read -r _line || [ -n "$_line" ]; do
       _i=$((_i+1))
       [ -n "$_line" ] || continue
       case "$_line" in \#*) continue ;; esac
@@ -146,6 +146,8 @@ case "$1" in
     esac
     # no duplicates
     if [ -f "$_f" ] && grep -qF "$_key" "$_f" 2>/dev/null; then echo "ok"; exit 0; fi
+    # a hand-edited file may lack the final newline: end that line first
+    if [ -s "$_f" ] && [ -n "$(tail -c 1 "$_f")" ]; then echo >> "$_f" || die "append failed"; fi
     printf '%s\n' "$_key" >> "$_f" || die "append failed"
     chmod 600 "$_f" 2>/dev/null
     echo "ok"
@@ -156,7 +158,7 @@ case "$1" in
     case "$_idx" in ''|*[!0-9]*) die "bad index" ;; esac
     [ -f "$_f" ] || die "no keys"
     _tmp="$_f.tmp.$$"; _i=0
-    while IFS= read -r _line; do
+    while IFS= read -r _line || [ -n "$_line" ]; do
       _i=$((_i+1)); [ "$_i" = "$_idx" ] && continue
       printf '%s\n' "$_line"
     done < "$_f" > "$_tmp"
@@ -167,7 +169,7 @@ case "$1" in
   list-pw)
     _f="$(vddb_secret_dir)/passwd"
     [ -f "$_f" ] || exit 0
-    while IFS= read -r _line; do
+    while IFS= read -r _line || [ -n "$_line" ]; do
       case "$_line" in ''|\#*) continue ;; esac
       printf '%s\n' "$(b64 "${_line%%:*}")"
     done < "$_f"
@@ -189,7 +191,7 @@ case "$1" in
     _f="$_d/passwd"; _tmp="$_f.tmp.$$"
     # drop any existing line for this user, then add the new one
     if [ -f "$_f" ]; then
-      while IFS= read -r _line; do
+      while IFS= read -r _line || [ -n "$_line" ]; do
         case "$_line" in "$_user":*) continue ;; esac
         printf '%s\n' "$_line"
       done < "$_f" > "$_tmp"
@@ -205,7 +207,7 @@ case "$1" in
     case "$_user" in ''|*[!a-zA-Z0-9_]*) die "bad user" ;; esac
     _f="$(vddb_secret_dir)/passwd"; [ -f "$_f" ] || { echo "ok"; exit 0; }
     _tmp="$_f.tmp.$$"
-    while IFS= read -r _line; do
+    while IFS= read -r _line || [ -n "$_line" ]; do
       case "$_line" in "$_user":*) continue ;; esac
       printf '%s\n' "$_line"
     done < "$_f" > "$_tmp"

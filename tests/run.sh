@@ -212,6 +212,26 @@ t_webui_passwords() {
     expect_eq "$(webui del-pw shell)" ok || return 1
     expect_eq "$(cut -d: -f1 "$CE/passwd")" root
 }
+# F3: a hand-edited file whose last line has no trailing newline
+t_webui_unterminated_last_line() {
+    mkdir -p "$CE"; chmod 700 "$CE"
+    printf 'ssh-ed25519 AAAAexample1 one@example\nssh-ed25519 AAAAexample2 two@example' > "$CE/authorized_keys"
+    expect_eq "$(webui list-keys | wc -l | tr -d ' ')" 2 || return 1
+    expect_eq "$(webui_in "ssh-rsa AAAAexample3 three@example" add-key)" ok || return 1
+    expect_eq "$(sed -n 2p "$CE/authorized_keys")" "ssh-ed25519 AAAAexample2 two@example" || return 1
+    expect_eq "$(sed -n 3p "$CE/authorized_keys")" "ssh-rsa AAAAexample3 three@example" || return 1
+    printf 'ssh-ed25519 AAAAexample1 one@example\nssh-ed25519 AAAAexample2 two@example' > "$CE/authorized_keys"
+    expect_eq "$(webui del-key 1)" ok || return 1
+    expect_eq "$(cat "$CE/authorized_keys")" "ssh-ed25519 AAAAexample2 two@example" || return 1
+    h='pbkdf2-sha256$600000$00112233$0011223344556677889900112233445566778899001122334455667788990011'
+    printf 'root:%s\nshell:%s' "$h" "$h" > "$CE/passwd"
+    expect_eq "$(webui list-pw | wc -l | tr -d ' ')" 2 || return 1
+    expect_eq "$(webui_in "$h" set-pw system)" ok || return 1
+    expect_eq "$(cut -d: -f1 "$CE/passwd" | tr '\n' ' ')" "root shell system " || return 1
+    printf 'root:%s\nshell:%s' "$h" "$h" > "$CE/passwd"
+    expect_eq "$(webui del-pw root)" ok || return 1
+    expect_eq "$(cut -d: -f1 "$CE/passwd" | tr '\n' ' ')" "shell "
+}
 t_webui_status() {
     cfg PORT=2299
     s=$(webui status)
@@ -356,7 +376,7 @@ t_uninstall() {
 }
 
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
-t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_keys t_webui_passwords t_webui_status
+t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_status
 t_action_start t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_stale_pidfile t_disabled_not_started t_service_afu_bfu
 t_service_disabled t_customize t_uninstall"
 
