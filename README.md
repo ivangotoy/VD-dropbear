@@ -150,10 +150,10 @@ set a password, the WebUI enforces a minimum strength and stores only a hash, ne
 
 ## Build
 
-The server binary is built by CI from **upstream [mkj/dropbear](https://github.com/mkj/dropbear)** with
+The server binary is built from **upstream [mkj/dropbear](https://github.com/mkj/dropbear)** with
 a small, auditable patch set (see [`patches/`](patches/)): a neutral/configurable identity string,
 config-driven paths for `authorized_keys` and the password file, and the Android `openpty` fix for
-interactive PTYs. A scheduled workflow tracks upstream and rebuilds, so the module stays current. See
+interactive PTYs. The binaries are rebuilt locally with `scripts/build.sh` and committed, with their sha256 in `module/bin/PROVENANCE.json`, which CI checks before it assembles the zip. See
 [`.github/workflows/`](.github/workflows/) and [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Incremental updates (VDLU)
