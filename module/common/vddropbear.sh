@@ -346,7 +346,7 @@ vddb_link_tools() {
 
 vddb_start() {
     vddb_load_config
-    [ "$ENABLED" = "1" ] || { vddb_log "disabled (ENABLED=0), not starting"; return 0; }
+    [ "$ENABLED" = "1" ] || { vddb_log "disabled (ENABLED=0), not starting"; vddb_stop; return 0; }
     vddb_stop
     vddb_ensure_hostkey || { vddb_log "FATAL: no host key, aborting"; return 1; }
     vddb_link_tools
