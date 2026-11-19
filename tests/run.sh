@@ -96,10 +96,15 @@ case "\$1" in
   -y) echo "Public key portion is:"; echo "ssh-ed25519 AAAAexample"; echo "Fingerprint: sha256:FAKEFP" ;;
 esac
 EOF
-    cat > "$B/toybox" <<'EOF'
+    # toybox: setsid waits "$FAKE/setsid-delay" seconds first when that file exists (a slow launcher)
+    cat > "$B/toybox" <<EOF
 #!/bin/sh
-c=$1; shift
-case "$c" in setsid|sleep) [ "$c" = sleep ] && exec sleep "$@"; exec "$@" ;; *) exit 1 ;; esac
+c=\$1; shift
+case "\$c" in
+  sleep) exec sleep "\$@" ;;
+  setsid) [ -s "$FAKE/setsid-delay" ] && sleep "\$(cat "$FAKE/setsid-delay")"; exec "\$@" ;;
+  *) exit 1 ;;
+esac
 EOF
     for t in scp rsync sftp-server; do printf '#!/bin/sh\n' > "$B/$t"; done
     chmod 755 "$STUB"/* "$B"/*
@@ -488,6 +493,19 @@ t_stale_pidfile() {
     kill "$other"
     expect_eq "$(cat "$DATA/state/daemon.pid")" "$(listener)"
 }
+# F29: Action and WebUI start report the daemon once the launcher has exec'd it, not
+# the state right after the background spawn (slow launcher: record not written yet)
+t_slow_start_reported() {
+    cfg PORT=2299
+    echo 0.5 > "$FAKE/setsid-delay"
+    out=$(sh "$MOD/action.sh")
+    expect_has "$out" "OK, running" || return 1
+    expect_has "$out" "pid    : $(listener)" || return 1
+    s=$(webui start)
+    expect_has "$s" "running=1" || return 1
+    expect_has "$s" "pid=$(listener)
+"
+}
 t_disabled_not_started() {
     cfg ENABLED=0
     out=$(sh "$MOD/action.sh")
@@ -568,7 +586,7 @@ t_build_fetch_partial() {
 
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_write_failure t_bfu_toggle_moves_secrets t_webui_status
-t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
+t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
 t_service_disabled t_customize t_uninstall t_build_fetch_partial"
 
 for c in $CASES; do run_case "$c"; done

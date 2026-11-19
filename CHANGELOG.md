@@ -59,6 +59,8 @@ module (`module.prop`) and on GitHub Releases.
 - Saving with ENABLED=0 stops the running daemon; an inherited banner is dropped when HIDE_IDENT is off.
 - A PORT outside 1-65535 is refused on save (`err: bad PORT`); an empty host key file is regenerated.
 - `daemon.log` is moved to `daemon.log.1` at start once it passes 1 MiB; EXTRA_ENV values are not glob-expanded.
+- Action and WebUI Start/Restart wait (up to about 3 s) for the launch before they report, instead of printing
+  FAILED / Stopped while the daemon is still starting.
 
 ## [v1.08] (2026-11-17)
 

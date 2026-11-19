@@ -60,6 +60,21 @@ _install() {
     mv -f "$1" "$2" 2>/dev/null || { rm -f "$1"; die "install failed"; }
 }
 
+# start/restart spawn the launcher in the background: wait (max ~3 s) until the
+# recorded pid is the daemon itself or has exited, so the status is not taken mid-launch
+_wait_spawned() {
+    [ "$ENABLED" = "1" ] || return 0
+    _i=0
+    while [ "$_i" -lt 15 ]; do
+        _p="$(cat "$VDDB_PIDFILE" 2>/dev/null)"
+        case "$_p" in ''|*[!0-9]*) ;; *)
+            [ "$(cat "/proc/$_p/comm" 2>/dev/null)" = "$VDDB_PROC" ] && return 0
+            vddb_pid_alive "$_p" || return 0 ;;
+        esac
+        _i=$((_i+1)); "$VDDB_TOYBOX" sleep 0.2 2>/dev/null
+    done
+}
+
 # --- config whitelist ------------------------------------------------------
 # Only these keys may be written. Everything else from the UI is dropped.
 VDDB_KEYS="ENABLED START_IN_BFU PORT LISTEN_LOOPBACK LISTEN_ALL LISTEN_IPV4 \
@@ -142,9 +157,9 @@ case "$1" in
     echo "ok"
     ;;
 # ----------------------------------------------------- daemon lifecycle ----
-  start)   vddb_start   >/dev/null 2>&1; exec sh "$0" status ;;
+  start)   vddb_start   >/dev/null 2>&1; _wait_spawned; exec sh "$0" status ;;
   stop)    vddb_stop_all >/dev/null 2>&1; exec sh "$0" status ;;
-  restart) vddb_restart >/dev/null 2>&1; exec sh "$0" status ;;
+  restart) vddb_restart >/dev/null 2>&1; _wait_spawned; exec sh "$0" status ;;
 # -------------------------------------------------------- authorized keys ----
   list-keys)
     _f="$(vddb_secret_dir)/authorized_keys"

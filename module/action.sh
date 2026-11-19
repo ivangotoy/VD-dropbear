@@ -32,6 +32,19 @@ echo "VD Dropbear: (re)launching the daemon..."
 vddb_restart
 
 vddb_load_config
+# the launcher runs in the background: wait (max ~3 s) until the recorded pid is the
+# daemon itself or has exited, so the report below is not taken mid-launch
+if [ "$ENABLED" = "1" ]; then
+    _i=0
+    while [ "$_i" -lt 15 ]; do
+        _p="$(cat "$VDDB_PIDFILE" 2>/dev/null)"
+        case "$_p" in ''|*[!0-9]*) ;; *)
+            [ "$(cat "/proc/$_p/comm" 2>/dev/null)" = "$VDDB_PROC" ] && break
+            vddb_pid_alive "$_p" || break ;;
+        esac
+        _i=$((_i+1)); "$VDDB_TOYBOX" sleep 0.2 2>/dev/null
+    done
+fi
 if vddb_is_running; then
     echo "OK, running"
     echo "  pid    : $(vddb_pid)"
