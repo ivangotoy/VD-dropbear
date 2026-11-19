@@ -69,6 +69,16 @@ EOF
     cat > "$B/vddropbear" <<EOF
 #!/bin/sh
 if [ "\$1" = __session ]; then while :; do sleep 1; done; fi
+# one listener per "port": an atomic lock dir owned by a live listener, like a bind
+while ! mkdir "$FAKE/port" 2>/dev/null; do
+    o=\$(cat "$FAKE/port/owner" 2>/dev/null)
+    if [ -n "\$o" ] && [ "\$(cat /proc/\$o/comm 2>/dev/null)" = vddropbear ]; then
+        echo "\$\$" >> "$FAKE/bind-failed"; exit 1
+    fi
+    [ -n "\$o" ] || { sleep 0.05; [ -n "\$(cat "$FAKE/port/owner" 2>/dev/null)" ] && continue; }
+    rm -rf "$FAKE/port"
+done
+echo "\$\$" > "$FAKE/port/owner"
 for a in "\$@"; do printf '%s\n' "\$a"; done > "$FAKE/argv.\$\$"
 env | grep -E '^(DROPBEAR_[A-Z_]*|HOME|PATH|SHELL|FOO|BAZ)=' > "$FAKE/env.\$\$"
 echo "\$\$" >> "$FAKE/started"
@@ -399,6 +409,25 @@ t_orphaned_session_not_listener() {
     alive "$s1" || fail "start signalled the orphaned session"
 }
 # F1: a stale pid record (daemon died at bind, pid reused by another process) is ignored
+# F1c: overlapping starts (double tap on Restart, boot start meeting Action)
+# converge on one listener, and status names it
+t_overlapping_starts() {
+    cfg PORT=2299
+    for r in 1 2 3 4 5; do
+        sh "$MOD/action.sh" >/dev/null & a=$!
+        sh "$MOD/action.sh" >/dev/null & b=$!
+        wait "$a" "$b"
+        sleep 0.3
+        n=$(fake_pids | wc -l | tr -d ' ')
+        [ "$n" = 1 ] || { fail "round $r: $n listeners"; return 1; }
+        p=$(fake_pids)
+        expect_has "$(webui status)" "pid=$p
+" || { fail "round $r: status does not name the listener"; return 1; }
+    done
+    sh "$MOD/action.sh" >/dev/null
+    sleep 0.3
+    expect_eq "$(fake_pids | wc -l | tr -d ' ')" 1
+}
 t_stale_pidfile() {
     cfg PORT=2299
     sleep 30 & other=$!
@@ -470,7 +499,7 @@ t_uninstall() {
 
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_write_failure t_bfu_toggle_moves_secrets t_webui_status
-t_action_start t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_stale_pidfile t_disabled_not_started t_disable_stops_running t_service_afu_bfu
+t_action_start t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_disabled_not_started t_disable_stops_running t_service_afu_bfu
 t_service_disabled t_customize t_uninstall"
 
 for c in $CASES; do run_case "$c"; done

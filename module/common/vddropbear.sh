@@ -267,13 +267,16 @@ vddb_export_env() {
 # Dropbear forks one child per connection and the children keep the process name,
 # so `pgrep -x vddropbear` also lists live SSH sessions. The listener is the pid
 # recorded at spawn (VDDB_PIDFILE); a pid only counts while it is a live (not
-# zombie) vddropbear process. Parentage cannot tell the listener from a session
-# orphaned by a dead listener, so there is no pgrep-based guess.
+# zombie) vddropbear process, or the launcher that wrote the record and has not
+# exec'd the daemon yet. Parentage cannot tell the listener from a session
+# orphaned by a dead listener, so there is no pgrep-based guess. The launcher
+# creates the record exclusively: of two overlapping starts only one execs.
 VDDB_PIDFILE="$VDDB_STATE/daemon.pid"
 vddb_pid_alive() {
-    [ "$(cat "/proc/$1/comm" 2>/dev/null)" = "$VDDB_PROC" ] || return 1
     _st="$(cat "/proc/$1/stat" 2>/dev/null)"; _st="${_st##*) }"
     case "$_st" in Z*|X*|'') return 1 ;; esac
+    [ "$(cat "/proc/$1/comm" 2>/dev/null)" = "$VDDB_PROC" ] && return 0
+    tr '\0' '\n' < "/proc/$1/cmdline" 2>/dev/null | grep -qxF "$VDDB_PIDFILE"
 }
 vddb_pid() {
     _p="$(cat "$VDDB_PIDFILE" 2>/dev/null)"
@@ -284,15 +287,19 @@ vddb_is_running() { [ -n "$(vddb_pid)" ]; }
 
 # Stop the listener only: open SSH sessions stay up, so a restart issued from an
 # SSH session does not cut the session that issued it.
+# drop the record only while it still names $1 (another start may own it by now)
+vddb_drop_record() { [ "$(cat "$VDDB_PIDFILE" 2>/dev/null)" = "$1" ] && rm -f "$VDDB_PIDFILE" 2>/dev/null; return 0; }
+
 vddb_stop() {
+    _r="$(cat "$VDDB_PIDFILE" 2>/dev/null)"
     _p="$(vddb_pid)"
-    [ -n "$_p" ] || { rm -f "$VDDB_PIDFILE" 2>/dev/null; return 0; }
+    [ -n "$_p" ] || { [ -e "$VDDB_PIDFILE" ] && vddb_drop_record "$_r"; return 0; }
     vddb_log "stopping daemon pid $_p"
     kill "$_p" 2>/dev/null
     # give it a moment, then force
     _i=0; while [ "$_i" -lt 10 ] && vddb_pid_alive "$_p"; do _i=$((_i+1)); "$VDDB_TOYBOX" sleep 0.2 2>/dev/null; done
     vddb_pid_alive "$_p" && kill -9 "$_p" 2>/dev/null
-    rm -f "$VDDB_PIDFILE" 2>/dev/null
+    vddb_drop_record "$_p"
     ! vddb_pid_alive "$_p"
 }
 
@@ -328,8 +335,11 @@ vddb_spawn() {
     # would otherwise be glob-expanded against the cwd.
     set -f
     set -- $(vddb_build_args | tr '\n' ' ')
-    # the launcher records its own pid, then exec keeps that pid for the daemon
-    "$VDDB_TOYBOX" setsid sh -c 'echo "$$" > "$0"; exec "$@"' "$VDDB_PIDFILE" "$VDDB_DROPBEAR" "$@" </dev/null >>"$VDDB_LOG" 2>&1 &
+    # The launcher records its own pid (exec keeps it for the daemon). The record is
+    # created exclusively (set -C): a launcher that finds another start's record
+    # exits instead of starting a second daemon; one that cannot write it at all
+    # (e.g. a full disk) still starts the daemon, as before.
+    "$VDDB_TOYBOX" setsid sh -c 'set -C; { echo "$$" > "$0"; } 2>/dev/null || { _o="$(cat "$0" 2>/dev/null)"; [ -n "$_o" ] && [ "$_o" != "$$" ] && exit 0; }; set +C; exec "$@"' "$VDDB_PIDFILE" "$VDDB_DROPBEAR" "$@" </dev/null >>"$VDDB_LOG" 2>&1 &
     set +f
     vddb_log "spawned daemon (port $PORT, listen $(vddb_listen_summary), mode $([ "$START_IN_BFU" = 1 ] && echo BFU || echo AFU))"
 }
