@@ -65,6 +65,8 @@ module (`module.prop`) and on GitHub Releases.
   from a hand-edited `passwd` file is never run as a command.
 - Removing a key or password account in the WebUI shows the backend's error instead of "removed" when the
   rewrite fails.
+- Release CI: a failed run deletes the forge release only while the forge still reports it as a draft, so a
+  publish whose reply was lost no longer deletes a published release.
 
 ## [v1.08] (2026-11-17)
 

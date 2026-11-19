@@ -1,6 +1,7 @@
 #!/bin/sh
 # VD Dropbear module test suite: POSIX sh, no dependencies beyond a POSIX userland
-# (t_webui_args_quoted also runs the WebUI page JS with node and is skipped without it).
+# (t_webui_args_quoted also runs the WebUI page JS with node, t_release_cleanup_keeps_published
+# runs module-ci.sh code with bash and python3; each is skipped without them).
 #   sh tests/run.sh
 # Runs the real module scripts (common/vddropbear.sh, common/vddb-webui.sh, service.sh,
 # action.sh, customize.sh, uninstall.sh) from a copy of module/ under $TMPDIR, against
@@ -608,10 +609,60 @@ t_build_fetch_partial() {
     expect_eq "$(cat "$W/a.tar.gz")" complete
 }
 
+# F32: module-ci.sh release: cleanup() deletes only a release the forge still reports as a
+# draft. Real: log/die/jget/api/cleanup and the publish statements (REQ= .. PUBLISHED=1), cut
+# from .forgejo/module-ci.sh by sed ranges; stubbed: curl (fake forge at https://forge.invalid).
+# Needs bash and python3 like the script itself (else SKIP).
+t_release_cleanup_keeps_published() {
+    command -v bash >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1 || return 77
+    ci="$REPO/.forgejo/module-ci.sh"
+    {
+        echo 'set -euo pipefail'
+        echo 'API=https://forge.invalid/api/v1/repos/example/mod RELEASE_ID=7 PUBLISHED=0 SRC_SHA=0123456789abcdef0123456789abcdef01234567'
+        echo 'AUTH_DIR=$(mktemp -d) AUTH_H=$AUTH_DIR/header; : > "$AUTH_H"'
+        sed -n '/^log() {/p; /^die() {/p; /^jget() {/,/^print(d)/p; /^api() {/,/^}/p; /^cleanup() {/,/^}/p' "$ci"
+        echo 'trap cleanup EXIT'
+        echo 'if [ "$1" = publish ]; then'
+        sed -n '/^REQ="\$(python3 -I -c .import json,sys;print(json.dumps({"draft":False/,/^PUBLISHED=1$/p' "$ci"
+        echo 'else die "upload failed"; fi'
+    } > "$W/rel.sh"
+    grep -q '^PUBLISHED=1$' "$W/rel.sh" && grep -q '^cleanup() {' "$W/rel.sh" || { fail "statements not found in module-ci.sh"; return 1; }
+    # fake curl: logs "METHOD URL"; PATCH exits $PATCH_RC; GET of the release answers draft=$DRAFT or fails (DRAFT=fail)
+    cat > "$STUB/curl" <<EOF
+#!/bin/sh
+m=GET; for a in "\$@"; do [ "\$p" = -X ] && m=\$a; p=\$a; u=\$a; done
+echo "\$m \$u" >> "$W/calls"
+case "\$m" in
+  PATCH) exit "\${PATCH_RC:-0}" ;;
+  GET) [ "\$DRAFT" = fail ] && exit 22; printf '{"id": 7, "draft": %s}' "\$DRAFT" ;;
+esac
+EOF
+    chmod 755 "$STUB/curl"
+    # (a) PATCH fails after the forge applied it (release now published): no DELETE, job fails
+    : > "$W/calls"; PATCH_RC=28 DRAFT=false TMPDIR=$W bash "$W/rel.sh" publish 2>"$W/err"; rc=$?
+    [ "$rc" != 0 ] || { fail "(a) exit 0 after a failed PATCH"; return 1; }
+    grep -q '^PATCH ' "$W/calls" || { fail "(a) no PATCH sent"; return 1; }
+    grep -q '^DELETE ' "$W/calls" && { fail "(a) published release deleted"; return 1; }
+    # (b) failure before publish, release still a draft: DELETE issued
+    : > "$W/calls"; DRAFT=true TMPDIR=$W bash "$W/rel.sh" upload 2>"$W/err"; rc=$?
+    [ "$rc" != 0 ] || { fail "(b) exit 0"; return 1; }
+    grep -qx 'DELETE https://forge.invalid/api/v1/repos/example/mod/releases/7' "$W/calls" || { fail "(b) draft not deleted"; return 1; }
+    # (c) PATCH fails and the state cannot be read: no DELETE, the id is logged for a manual check
+    : > "$W/calls"; PATCH_RC=28 DRAFT=fail TMPDIR=$W bash "$W/rel.sh" publish 2>"$W/err"; rc=$?
+    [ "$rc" != 0 ] || { fail "(c) exit 0"; return 1; }
+    grep -q '^DELETE ' "$W/calls" && { fail "(c) release deleted with unknown state"; return 1; }
+    grep -q 'release 7' "$W/err" || { fail "(c) release id not logged"; return 1; }
+    # (d) PATCH succeeds: nothing deleted, exit 0
+    : > "$W/calls"; DRAFT=false TMPDIR=$W bash "$W/rel.sh" publish 2>"$W/err"; rc=$?
+    expect_eq "$rc" 0 || return 1
+    grep -q '^DELETE ' "$W/calls" && fail "(d) deleted after a good publish"
+    return 0
+}
+
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_webui_status
 t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
-t_service_disabled t_customize t_uninstall t_build_fetch_partial"
+t_service_disabled t_customize t_uninstall t_build_fetch_partial t_release_cleanup_keeps_published"
 
 for c in $CASES; do run_case "$c"; done
 echo "summary: pass=$PASS fail=$FAIL skip=$SKIP${FAILED:+ failed:$FAILED}"
