@@ -60,14 +60,14 @@ if [ -x "$VDDB_BIN_DIR/toybox" ]; then VDDB_TOYBOX="$VDDB_BIN_DIR/toybox"; else 
 # VDDB_ROOT: path prefix for tests only; empty (unset) on a device.
 # Persistent DE store: settings + runtime state + (only in BFU mode) secrets.
 # Lives outside the module dir so it survives module updates/removal.
-VDDB_DATA="$VDDB_ROOT/data/adb/$VDDB_NAME"
+VDDB_DATA="${VDDB_ROOT:-}/data/adb/$VDDB_NAME"
 VDDB_CONFIG="$VDDB_DATA/config"
 VDDB_STATE="$VDDB_DATA/state"
 VDDB_LOG="$VDDB_STATE/daemon.log"
 VDDB_DE_SECRET="$VDDB_DATA/secret"          # used only when START_IN_BFU=1
 
 # Credential-encrypted store: the secure default home for secrets (AFU only).
-VDDB_CE_SECRET="$VDDB_ROOT/data/misc_ce/0/$VDDB_NAME/secret"
+VDDB_CE_SECRET="${VDDB_ROOT:-}/data/misc_ce/0/$VDDB_NAME/secret"
 
 # --- small helpers ---------------------------------------------------------
 vddb_log() { echo "$(date '+%Y-%m-%d %H:%M:%S') $*" 2>/dev/null >> "$VDDB_LOG"; }
@@ -180,7 +180,7 @@ vddb_ensure_hostkey() {
 # recreated each start (service.sh), so it persists across reboots in practice.
 # Falls back to the real path if the shim can't be made.
 vddb_authkeys_link() {
-    _real="$1"; _shim="$VDDB_ROOT/dev/vddropbear"
+    _real="$1"; _shim="${VDDB_ROOT:-}/dev/vddropbear"
     if mkdir -p "$_shim" 2>/dev/null && chmod 700 "$_shim" 2>/dev/null; then
         chown 0:0 "$_shim" 2>/dev/null
         ln -sfn "$_real" "$_shim/authorized_keys" 2>/dev/null && { echo "$_shim/authorized_keys"; return 0; }
