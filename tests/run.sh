@@ -337,6 +337,15 @@ t_action_start() {
 }
 # A restart run from an SSH session (daemon env passed on with -e) must not keep
 # the old banner once HIDE_IDENT is off
+# F7: an empty host key file (crash between create and write) is regenerated;
+# dropbearkey (and the stub) refuse to overwrite an existing file
+t_empty_hostkey_regenerated() {
+    cfg PORT=2299
+    mkdir -p "$CE"; : > "$CE/hostkey_ed25519"
+    out=$(sh "$MOD/action.sh")
+    expect_has "$out" "OK, running" || return 1
+    [ -s "$CE/hostkey_ed25519" ] || fail "host key still empty"
+}
 t_ident_not_inherited() {
     cfg HIDE_IDENT=0
     DROPBEAR_IDENT=SSH-2.0-oldbanner sh "$MOD/action.sh" >/dev/null
@@ -506,7 +515,7 @@ t_uninstall() {
 
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_write_failure t_bfu_toggle_moves_secrets t_webui_status
-t_action_start t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
+t_action_start t_empty_hostkey_regenerated t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
 t_service_disabled t_customize t_uninstall"
 
 for c in $CASES; do run_case "$c"; done

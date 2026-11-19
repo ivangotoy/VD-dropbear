@@ -160,6 +160,7 @@ vddb_ensure_hostkey() {
     mkdir -p "$_d" 2>/dev/null; chmod 700 "$_d" 2>/dev/null
     if [ ! -s "$_k" ]; then
         vddb_log "generating $HOSTKEY_TYPE host key at $_k"
+        rm -f "$_k" 2>/dev/null   # an empty leftover would make dropbearkey refuse
         "$VDDB_KEYGEN" -t "$HOSTKEY_TYPE" -f "$_k" >/dev/null 2>&1
         chmod 600 "$_k" 2>/dev/null
     fi
