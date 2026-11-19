@@ -61,6 +61,8 @@ module (`module.prop`) and on GitHub Releases.
 - `daemon.log` is moved to `daemon.log.1` at start once it passes 1 MiB; EXTRA_ENV values are not glob-expanded.
 - Action and WebUI Start/Restart wait (up to about 3 s) for the launch before they report, instead of printing
   FAILED / Stopped while the daemon is still starting.
+- The WebUI passes its arguments (key index, account name) to the shell single-quoted, so an account name read
+  from a hand-edited `passwd` file is never run as a command.
 
 ## [v1.08] (2026-11-17)
 

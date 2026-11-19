@@ -1,5 +1,6 @@
 #!/bin/sh
-# VD Dropbear module test suite: POSIX sh, no dependencies beyond a POSIX userland.
+# VD Dropbear module test suite: POSIX sh, no dependencies beyond a POSIX userland
+# (t_webui_args_quoted also runs the WebUI page JS with node and is skipped without it).
 #   sh tests/run.sh
 # Runs the real module scripts (common/vddropbear.sh, common/vddb-webui.sh, service.sh,
 # action.sh, customize.sh, uninstall.sh) from a copy of module/ under $TMPDIR, against
@@ -258,6 +259,25 @@ t_webui_unterminated_last_line() {
     printf 'root:%s\nshell:%s' "$h" "$h" > "$CE/passwd"
     expect_eq "$(webui del-pw root)" ok || return 1
     expect_eq "$(cut -d: -f1 "$CE/passwd" | tr '\n' ' ')" "shell "
+}
+# F27: a WebUI argument reaches the backend as one literal word: a user name read back
+# from a hand-edited passwd file is not run by the shell (page JS, needs node: else SKIP)
+t_webui_args_quoted() {
+    node -e "" >/dev/null 2>&1 || return 77
+    printf 'const SH = process.argv[2]; let CMD = "";\nfunction exec(c) { CMD = c; return Promise.resolve({ errno: 0, stdout: "", stderr: "" }); }\n' > "$W/run.js"
+    sed -n '/^function shq(/p; /^async function api(/,/^}/p; /^async function apiIn(/,/^}/p' "$MOD/webroot/index.html" >> "$W/run.js"
+    printf 'const [verb, arg, inp] = process.argv.slice(3);\n(inp ? apiIn(verb, inp, arg) : api(verb, arg)).then(() => process.stdout.write(CMD));\n' >> "$W/run.js"
+    printf '#!/bin/sh\ncat > "%s/stdin"; for a in "$@"; do printf "[%%s]" "$a"; done > "%s/args"\n' "$W" "$W" > "$W/backend"
+    evil="x\$(touch $W/pwned)';touch $W/pwned2;'y"
+    cmd=$(node "$W/run.js" "$W/backend" del-pw "$evil" </dev/null) || { fail "node run failed"; return 1; }
+    sh -c "$cmd" </dev/null 2>/dev/null
+    [ ! -e "$W/pwned" ] && [ ! -e "$W/pwned2" ] || { fail "argument run by the shell: $cmd"; return 1; }
+    expect_eq "$(cat "$W/args" 2>/dev/null)" "[del-pw][$evil]" || return 1
+    cmd=$(node "$W/run.js" "$W/backend" set-pw "$evil" QUJD </dev/null) || { fail "node run failed"; return 1; }
+    sh -c "$cmd" 2>/dev/null
+    [ ! -e "$W/pwned" ] && [ ! -e "$W/pwned2" ] || { fail "argument run by the shell: $cmd"; return 1; }
+    expect_eq "$(cat "$W/args" 2>/dev/null)" "[set-pw][$evil]" || return 1
+    expect_eq "$(cat "$W/stdin")" QUJD
 }
 # F4: a failed rewrite reports an error, keeps the old file and leaves no temp file
 t_webui_write_failure() {
@@ -585,7 +605,7 @@ t_build_fetch_partial() {
 }
 
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
-t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_write_failure t_bfu_toggle_moves_secrets t_webui_status
+t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_webui_status
 t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
 t_service_disabled t_customize t_uninstall t_build_fetch_partial"
 

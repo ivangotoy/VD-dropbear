@@ -254,13 +254,15 @@ function exec(cmd, opts = {}) {
     catch (e) { reject(e); }
   });
 }
+/* an argument goes to the shell as one single-quoted word (' -> '\'') */
+function shq(s) { return "'" + String(s).replace(/'/g, "'\\''") + "'"; }
 async function api(verb, arg) {
-  const cmd = "sh " + SH + " " + verb + (arg ? " " + arg : "");
+  const cmd = "sh " + SH + " " + verb + (arg ? " " + shq(arg) : "");
   const r = await exec(cmd);
   return r.stdout;
 }
 async function apiIn(verb, b64, arg) {
-  const cmd = "printf %s '" + b64 + "' | sh " + SH + " " + verb + (arg ? " " + arg : "");
+  const cmd = "printf %s '" + b64 + "' | sh " + SH + " " + verb + (arg ? " " + shq(arg) : "");
   const r = await exec(cmd);
   return r.stdout;
 }
