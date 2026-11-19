@@ -520,9 +520,13 @@ t_slow_start_reported() {
     echo 0.5 > "$FAKE/setsid-delay"
     out=$(sh "$MOD/action.sh")
     expect_has "$out" "OK, running" || return 1
-    expect_has "$out" "pid    : $(listener)" || return 1
+    wait_for '[ -n "$(listener)" ]' || { fail "daemon never started"; return 1; }
+    p1=$(listener)
+    expect_has "$out" "pid    : $p1
+" || return 1
     s=$(webui start)
     expect_has "$s" "running=1" || return 1
+    wait_for '[ "$(listener)" != "$p1" ]' || { fail "start did not replace the daemon"; return 1; }
     expect_has "$s" "pid=$(listener)
 "
 }
