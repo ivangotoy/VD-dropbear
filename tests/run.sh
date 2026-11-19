@@ -316,6 +316,23 @@ t_restart_keeps_sessions() {
     expect_has "$s" "running=0" || return 1
     wait_for '[ -z "$(fake_pids)" ]' || fail "stop left processes"
 }
+# F1b: listener gone (killed, or a new daemon died at bind), its session orphaned:
+# the orphan is not reported as the daemon and the next start does not signal it
+t_orphaned_session_not_listener() {
+    cfg PORT=2299
+    echo 1 > "$FAKE/sessions"
+    sh "$MOD/action.sh" >/dev/null
+    wait_for '[ -s "$FAKE/session-pids" ]' || { fail "no session spawned"; return 1; }
+    l1=$(listener); s1=$(cat "$FAKE/session-pids")
+    echo 0 > "$FAKE/sessions"
+    kill -9 "$l1"
+    wait_for '! alive "$l1"' || return 1
+    expect_has "$(webui status)" "running=0" || return 1
+    sh "$MOD/action.sh" >/dev/null
+    wait_for '[ "$(listener)" != "$l1" ]' || { fail "no new listener"; return 1; }
+    sleep 0.5
+    alive "$s1" || fail "start signalled the orphaned session"
+}
 # F1: a stale pid record (daemon died at bind, pid reused by another process) is ignored
 t_stale_pidfile() {
     cfg PORT=2299
@@ -377,7 +394,7 @@ t_uninstall() {
 
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_status
-t_action_start t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_stale_pidfile t_disabled_not_started t_service_afu_bfu
+t_action_start t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_stale_pidfile t_disabled_not_started t_service_afu_bfu
 t_service_disabled t_customize t_uninstall"
 
 for c in $CASES; do run_case "$c"; done

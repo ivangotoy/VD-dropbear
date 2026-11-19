@@ -245,8 +245,8 @@ vddb_export_env() {
 # Dropbear forks one child per connection and the children keep the process name,
 # so `pgrep -x vddropbear` also lists live SSH sessions. The listener is the pid
 # recorded at spawn (VDDB_PIDFILE); a pid only counts while it is a live (not
-# zombie) vddropbear process. Without a valid record (a daemon started by an older
-# version), the listener is the vddropbear whose parent is not a vddropbear.
+# zombie) vddropbear process. Parentage cannot tell the listener from a session
+# orphaned by a dead listener, so there is no pgrep-based guess.
 VDDB_PIDFILE="$VDDB_STATE/daemon.pid"
 vddb_pid_alive() {
     [ "$(cat "/proc/$1/comm" 2>/dev/null)" = "$VDDB_PROC" ] || return 1
@@ -255,14 +255,8 @@ vddb_pid_alive() {
 }
 vddb_pid() {
     _p="$(cat "$VDDB_PIDFILE" 2>/dev/null)"
-    case "$_p" in ''|*[!0-9]*) ;; *) vddb_pid_alive "$_p" && { echo "$_p"; return 0; } ;; esac
-    for _p in $(pgrep -x "$VDDB_PROC" 2>/dev/null); do
-        vddb_pid_alive "$_p" || continue
-        _st="$(cat "/proc/$_p/stat" 2>/dev/null)"; _st="${_st##*) }"
-        _pp="${_st#* }"; _pp="${_pp%% *}"
-        [ "$(cat "/proc/$_pp/comm" 2>/dev/null)" = "$VDDB_PROC" ] || { echo "$_p"; return 0; }
-    done
-    return 1
+    case "$_p" in ''|*[!0-9]*) return 1 ;; esac
+    vddb_pid_alive "$_p" && echo "$_p"
 }
 vddb_is_running() { [ -n "$(vddb_pid)" ]; }
 
