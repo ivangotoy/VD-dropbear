@@ -68,7 +68,7 @@ triple() {
 
 fetch() { # url outfile
   [ -f "$2" ] && return 0
-  curl -fsSL -o "$2" "$1"
+  curl -fsSL -o "$2.part" "$1" && mv -f "$2.part" "$2"
 }
 
 echo "==> fetching sources (zlib $ZLIB_VERSION, rsync $RSYNC_VERSION, openssh $OPENSSH_VERSION)"

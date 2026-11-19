@@ -553,10 +553,23 @@ t_uninstall() {
     [ -f "$DATA/config" ] || fail "config removed"
 }
 
+# --- cases: build tooling (logic taken from the script text, nothing fetched) ---
+# F12: scripts/build-bundles.sh fetch() must not reuse a partial download as a cached tarball
+t_build_fetch_partial() {
+    sed -n '/^fetch() {/,/^}/p' "$REPO/scripts/build-bundles.sh" > "$W/fetch.sh"
+    [ -s "$W/fetch.sh" ] || { fail "fetch() not found"; return 1; }
+    printf '#!/bin/sh\nwhile [ "$#" -gt 1 ]; do [ "$1" = -o ] && o=$2; shift; done\nprintf partial > "$o"; exit 18\n' > "$STUB/curl"
+    chmod 755 "$STUB/curl"
+    ( . "$W/fetch.sh"; fetch https://example.invalid/a.tar.gz "$W/a.tar.gz" ) && { fail "failed download reported ok"; return 1; }
+    printf '#!/bin/sh\nwhile [ "$#" -gt 1 ]; do [ "$1" = -o ] && o=$2; shift; done\nprintf complete > "$o"\n' > "$STUB/curl"
+    ( . "$W/fetch.sh"; fetch https://example.invalid/a.tar.gz "$W/a.tar.gz" ) || { fail "retry failed"; return 1; }
+    expect_eq "$(cat "$W/a.tar.gz")" complete
+}
+
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_write_failure t_bfu_toggle_moves_secrets t_webui_status
 t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
-t_service_disabled t_customize t_uninstall"
+t_service_disabled t_customize t_uninstall t_build_fetch_partial"
 
 for c in $CASES; do run_case "$c"; done
 echo "summary: pass=$PASS fail=$FAIL skip=$SKIP${FAILED:+ failed:$FAILED}"
