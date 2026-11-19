@@ -373,8 +373,6 @@ t_action_start() {
     expect_eq "$(mode_of "$ROOT/dev/vddropbear")" "drwx------" || return 1
     [ -L "$DATA/bin/scp" ] || fail "tools not linked"
 }
-# A restart run from an SSH session (daemon env passed on with -e) must not keep
-# the old banner once HIDE_IDENT is off
 # F7: an empty host key file (crash between create and write) is regenerated;
 # dropbearkey (and the stub) refuse to overwrite an existing file
 t_empty_hostkey_regenerated() {
@@ -395,7 +393,6 @@ t_log_rotated() {
     sh "$MOD/action.sh" >/dev/null
     [ "$(wc -c < "$DATA/state/daemon.log.1")" -ge 1126400 ] || fail "small log rotated over the old copy"
 }
-# F10: EXTRA_ENV values are taken literally, not glob-expanded against the cwd
 # F8b: the first start with no daemon.log yet must not print errors
 t_start_without_log_quiet() {
     cfg PORT=2299
@@ -404,6 +401,7 @@ t_start_without_log_quiet() {
     err=$(sh "$MOD/action.sh" 2>&1 >/dev/null)
     expect_eq "$err" ""
 }
+# F10: EXTRA_ENV values are taken literally, not glob-expanded against the cwd
 t_extra_env_no_glob() {
     cfg "EXTRA_ENV='FOO=*'"
     mkdir -p "$W/cwd"; : > "$W/cwd/FOO=expanded"
@@ -411,6 +409,8 @@ t_extra_env_no_glob() {
     wait_for '[ -s "$FAKE/env.$(listener)" ]' || { fail "no start"; return 1; }
     expect_has "$(cat "$FAKE/env.$(listener)")" "FOO=*"
 }
+# A restart run from an SSH session (daemon env passed on with -e) must not keep
+# the old banner once HIDE_IDENT is off
 t_ident_not_inherited() {
     cfg HIDE_IDENT=0
     DROPBEAR_IDENT=SSH-2.0-oldbanner sh "$MOD/action.sh" >/dev/null
@@ -482,7 +482,6 @@ t_orphaned_session_not_listener() {
     sleep 0.5
     alive "$s1" || fail "start signalled the orphaned session"
 }
-# F1: a stale pid record (daemon died at bind, pid reused by another process) is ignored
 # F1c: overlapping starts (double tap on Restart, boot start meeting Action)
 # converge on one listener, and status names it
 t_overlapping_starts() {
@@ -502,6 +501,7 @@ t_overlapping_starts() {
     sleep 0.3
     expect_eq "$(fake_pids | wc -l | tr -d ' ')" 1
 }
+# F1: a stale pid record (daemon died at bind, pid reused by another process) is ignored
 t_stale_pidfile() {
     cfg PORT=2299
     sleep 30 & other=$!
