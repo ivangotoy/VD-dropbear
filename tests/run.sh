@@ -187,6 +187,18 @@ t_webui_config_rejects_empty() {
     [ "$rc" != 0 ] || fail "exit 0 on error" || return 1
     expect_eq "$(cat "$DATA/config")" PORT=2299
 }
+# F9: an out-of-range PORT is refused at save time instead of failing at bind
+t_webui_port_range() {
+    cfg PORT=2299
+    for v in 0 65536 70000 99999999999999999999 22x; do
+        out=$(webui_in "$(printf 'PORT=%s\nLISTEN_ALL=0' "$v")" set-config 2>/dev/null); rc=$?
+        expect_eq "$out" "err: bad PORT" || { fail "PORT=$v accepted"; return 1; }
+        [ "$rc" != 0 ] || { fail "exit 0 for PORT=$v"; return 1; }
+    done
+    expect_eq "$(cat "$DATA/config")" PORT=2299 || return 1
+    expect_eq "$(webui_in "$(printf 'PORT=65535\nLISTEN_ALL=0')" set-config)" ok || return 1
+    expect_eq "$(webui_in "$(printf 'PORT=\nLISTEN_ALL=0')" set-config)" ok
+}
 t_webui_keys() {
     k1="ssh-ed25519 AAAAexample1 one@example"
     k2="ssh-rsa AAAAexample2 two@example"
@@ -525,7 +537,7 @@ t_uninstall() {
 }
 
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
-t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_write_failure t_bfu_toggle_moves_secrets t_webui_status
+t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_write_failure t_bfu_toggle_moves_secrets t_webui_status
 t_action_start t_empty_hostkey_regenerated t_log_rotated t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
 t_service_disabled t_customize t_uninstall"
 

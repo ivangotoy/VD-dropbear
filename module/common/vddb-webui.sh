@@ -106,12 +106,19 @@ case "$1" in
     ;;
 # ------------------------------------------------------------- set-config ----
   set-config)
+    _in="$(unb64)"
+    # a port the daemon cannot bind is refused here (empty = the 2222 default)
+    _port="$(printf '%s\n' "$_in" | sed -n 's/^PORT=//p' | tr -d '\r' | tail -n 1)"
+    if [ -n "$_port" ]; then
+      case "$_port" in *[!0-9]*) die "bad PORT" ;; esac
+      { [ "$_port" -ge 1 ] && [ "$_port" -le 65535 ]; } 2>/dev/null || die "bad PORT"
+    fi
     _new="$VDDB_DATA/config.new.$$"
     mkdir -p "$VDDB_DATA" 2>/dev/null
     {
       echo "# VD Dropbear configuration, written by the WebUI. KEY='value'."
       # Read KEY=VALUE pairs (one per line) from the base64 stdin payload.
-      unb64 | while IFS= read -r _line || [ -n "$_line" ]; do
+      printf '%s\n' "$_in" | while IFS= read -r _line || [ -n "$_line" ]; do
         case "$_line" in *=*) : ;; *) continue ;; esac
         _k=${_line%%=*}; _v=${_line#*=}
         _is_key "$_k" || continue
