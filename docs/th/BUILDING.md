@@ -52,7 +52,7 @@ ABIS="arm64-v8a" ./scripts/build.sh
 bionic libc ที่ทุกอุปกรณ์ Android มีอยู่แล้ว libtomcrypt ยังคงฝังอยู่ภายในไบนารี มีเพียงไลบรารี C เท่านั้น
 ที่เป็นไดนามิก ดู [ไดนามิก ไม่ใช่ static-PIE](#ไดนามก-ไมใช-static-pie)
 
-ไบนารี **ไม่ถูกคอมมิต** ถูกสร้างโดย CI ในทุกแท็กและแนบไปกับรีลีส ดู [`.gitignore`](../../.gitignore)
+ไบนารี **ถูกคอมมิต** ไว้ใน `module/bin/<abi>/` พร้อมค่า sha256 ใน `module/bin/PROVENANCE.json` CI จะตรวจสอบและไม่บิลด์ใหม่ ดู [`.gitignore`](../../.gitignore)
 
 ---
 

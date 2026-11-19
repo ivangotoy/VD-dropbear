@@ -52,7 +52,7 @@ riporta `dynamically linked, interpreter /system/bin/linker64 … for Android 24
 bionic che ogni dispositivo Android ha già. libtomcrypt resta incorporato nel binario; solo la libreria
 C è dinamica. Vedi [Dinamico, non static-PIE](#dinamico-non-static-pie).
 
-I binari **non vengono committati**; li compila la CI a ogni tag e vengono allegati alla release. Vedi
+I binari **sono committati** in `module/bin/<abi>/`, con il loro sha256 in `module/bin/PROVENANCE.json`; la CI li verifica e non li ricompila. Vedi
 [`.gitignore`](../../.gitignore).
 
 ---

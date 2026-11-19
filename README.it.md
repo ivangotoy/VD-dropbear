@@ -155,11 +155,11 @@ testo in chiaro.
 
 ## Build
 
-Il binario del server è compilato dalla CI a partire dall'**upstream [mkj/dropbear](https://github.com/mkj/dropbear)**
+Il binario del server è compilato a partire dall'**upstream [mkj/dropbear](https://github.com/mkj/dropbear)**
 con un piccolo set di patch verificabili (vedi [`patches/`](patches/)): una stringa di identità
 neutra/configurabile, percorsi guidati dalla configurazione per `authorized_keys` e il file delle password,
-e la correzione `openpty` per Android per le PTY interattive. Un workflow pianificato segue l'upstream e
-ricompila, così il modulo resta aggiornato. Vedi [`.github/workflows/`](.github/workflows/) e
+e la correzione `openpty` per Android per le PTY interattive. I binari vengono ricompilati in locale con `scripts/build.sh` e
+committati, con il loro sha256 in `module/bin/PROVENANCE.json`, che la CI verifica prima di assemblare lo zip. Vedi [`.github/workflows/`](.github/workflows/) e
 [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Documentazione

@@ -152,10 +152,10 @@ Gdy jednak ustawisz hasło, WebUI wymusza minimalną siłę i przechowuje wyłą
 
 ## Build
 
-Binarka serwera jest budowana przez CI z **upstream [mkj/dropbear](https://github.com/mkj/dropbear)** z niewielkim,
+Binarka serwera jest budowana z **upstream [mkj/dropbear](https://github.com/mkj/dropbear)** z niewielkim,
 audytowalnym zestawem patchy (zobacz [`patches/`](patches/)): neutralny/konfigurowalny ciąg tożsamości, sterowane
 konfiguracją ścieżki dla `authorized_keys` i pliku haseł oraz androidowa poprawka `openpty` dla interaktywnych PTY.
-Zaplanowany workflow śledzi upstream i przebudowuje, dzięki czemu moduł pozostaje aktualny. Zobacz
+Binarki są przebudowywane lokalnie za pomocą `scripts/build.sh` i commitowane wraz z ich sha256 w `module/bin/PROVENANCE.json`, które CI sprawdza przed złożeniem zipa. Zobacz
 [`.github/workflows/`](.github/workflows/) i [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Dokumentacja

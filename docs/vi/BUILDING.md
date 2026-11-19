@@ -52,7 +52,7 @@ dịch chéo `vddropbear` và `dropbearkey` vào `module/bin/<abi>/`. Đầu ra 
 mọi thiết bị Android đã có sẵn. libtomcrypt vẫn được nhúng bên trong tệp nhị phân; chỉ thư viện C là
 động. Xem [Động, không phải static-PIE](#động-không-phải-static-pie).
 
-Các tệp nhị phân **không được commit**; chúng được CI biên dịch ở mỗi tag và đính kèm vào bản phát hành.
+Các tệp nhị phân **được commit** trong `module/bin/<abi>/`, cùng sha256 trong `module/bin/PROVENANCE.json`; CI kiểm tra chúng và không biên dịch lại.
 Xem [`.gitignore`](../../.gitignore).
 
 ---

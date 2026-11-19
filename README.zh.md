@@ -140,10 +140,10 @@ shell，并且可以：
 
 ## 构建
 
-服务器二进制文件由 CI 从**上游 [mkj/dropbear](https://github.com/mkj/dropbear)** 构建，带有一小套可审计的
+服务器二进制文件从**上游 [mkj/dropbear](https://github.com/mkj/dropbear)** 构建，带有一小套可审计的
 补丁（见 [`patches/`](patches/)）：一个中性/可配置的身份字符串、为 `authorized_keys` 和密码文件提供的由
-配置驱动的路径，以及用于交互式 PTY 的 Android `openpty` 修复。一个计划任务工作流会跟踪上游并重新构建，使
-模块保持最新。见 [`.github/workflows/`](.github/workflows/) 和 [`CONTRIBUTING.md`](CONTRIBUTING.md)。
+配置驱动的路径，以及用于交互式 PTY 的 Android `openpty` 修复。二进制文件在本地用 `scripts/build.sh` 重新构建后提交，其 sha256 记录在
+`module/bin/PROVENANCE.json` 中，CI 在打包 zip 之前会校验。见 [`.github/workflows/`](.github/workflows/) 和 [`CONTRIBUTING.md`](CONTRIBUTING.md)。
 
 ## 文档
 

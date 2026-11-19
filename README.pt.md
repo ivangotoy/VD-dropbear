@@ -151,11 +151,11 @@ Quando você define uma senha, a WebUI impõe uma força mínima e armazena apen
 
 ## Build
 
-O binário do servidor é compilado pelo CI a partir do **upstream [mkj/dropbear](https://github.com/mkj/dropbear)**
+O binário do servidor é compilado a partir do **upstream [mkj/dropbear](https://github.com/mkj/dropbear)**
 com um conjunto de patches pequeno e auditável (veja [`patches/`](patches/)): uma string de identidade
 neutra/configurável, caminhos guiados por configuração para `authorized_keys` e o arquivo de senhas, e a
-correção `openpty` do Android para PTYs interativas. Um workflow agendado acompanha o upstream e recompila, de
-modo que o módulo se mantém atualizado. Veja [`.github/workflows/`](.github/workflows/) e
+correção `openpty` do Android para PTYs interativas. Os binários são recompilados localmente com `scripts/build.sh` e commitados,
+com seu sha256 em `module/bin/PROVENANCE.json`, que o CI verifica antes de montar o zip. Veja [`.github/workflows/`](.github/workflows/) e
 [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Documentação

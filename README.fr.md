@@ -161,12 +161,12 @@ et ne stocke qu'une empreinte, jamais de texte en clair.
 
 ## Compilation
 
-Le binaire du serveur est compilé par la CI à partir de l'**upstream
+Le binaire du serveur est compilé à partir de l'**upstream
 [mkj/dropbear](https://github.com/mkj/dropbear)** avec un petit jeu de correctifs auditables (voir
 [`patches/`](patches/)) : une chaîne d'identité neutre/configurable, des chemins pilotés par la
 configuration pour `authorized_keys` et le fichier de mots de passe, et le correctif `openpty`
-d'Android pour les PTY interactifs. Un workflow planifié suit l'upstream et recompile, afin que le
-module reste à jour. Voir [`.github/workflows/`](.github/workflows/) et
+d'Android pour les PTY interactifs. Les binaires sont recompilés localement avec `scripts/build.sh` et commités, avec
+leur sha256 dans `module/bin/PROVENANCE.json`, que la CI vérifie avant d'assembler le zip. Voir [`.github/workflows/`](.github/workflows/) et
 [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Documentation

@@ -52,7 +52,7 @@ ABIS="arm64-v8a" ./scripts/build.sh
 가지고 있는 bionic libc에 링크됩니다. libtomcrypt는 바이너리 안에 임베드된 채로 남고, 동적인 것은 C 라이
 브러리뿐입니다. [동적, static-PIE 아님](#동적-static-pie-아님)을 참고하세요.
 
-바이너리는 **커밋되지 않습니다**. 태그마다 CI가 빌드하여 릴리스에 첨부합니다. [`.gitignore`](../../.gitignore)를
+바이너리는 `module/bin/<abi>/`에 **커밋되어 있으며**, sha256은 `module/bin/PROVENANCE.json`에 있습니다. CI는 이를 검증만 하고 다시 빌드하지 않습니다. [`.gitignore`](../../.gitignore)를
 참고하세요.
 
 ---

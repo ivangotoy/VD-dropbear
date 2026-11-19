@@ -53,7 +53,7 @@ ABIS="arm64-v8a" ./scripts/build.sh
 リ内に埋め込まれたままで、動的なのは C ライブラリだけです。[動的、static-PIE ではない](#動的static-pie-ではない)
 を参照してください。
 
-バイナリは **コミットされません**。タグごとに CI がビルドし、リリースに添付します。
+バイナリは `module/bin/<abi>/` に **コミットされています**。sha256 は `module/bin/PROVENANCE.json` にあり、CI はそれと照合するだけで再ビルドしません。
 [`.gitignore`](../../.gitignore) を参照してください。
 
 ---

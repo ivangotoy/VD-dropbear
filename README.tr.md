@@ -160,11 +160,11 @@ saklar, asla düz metin değil.
 
 ## Derleme
 
-Sunucu ikili dosyası, CI tarafından **üst kaynak [mkj/dropbear](https://github.com/mkj/dropbear)**'den
+Sunucu ikili dosyası **üst kaynak [mkj/dropbear](https://github.com/mkj/dropbear)**'den
 küçük ve denetlenebilir bir yama kümesiyle derlenir (bkz. [`patches/`](patches/)): nötr/yapılandırılabilir
 bir kimlik dizesi, `authorized_keys` ve parola dosyası için yapılandırmadan okunan yollar ve
-etkileşimli PTY'ler için Android `openpty` düzeltmesi. Zamanlanmış bir iş akışı üst kaynağı izler ve
-yeniden derler; böylece modül güncel kalır. Bkz. [`.github/workflows/`](.github/workflows/) ve
+etkileşimli PTY'ler için Android `openpty` düzeltmesi. İkili dosyalar `scripts/build.sh` ile yerelde yeniden
+derlenip commit edilir; sha256 değerleri `module/bin/PROVENANCE.json` içindedir ve CI zip dosyasını oluşturmadan önce bunları denetler. Bkz. [`.github/workflows/`](.github/workflows/) ve
 [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Belgeler

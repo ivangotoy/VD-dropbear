@@ -160,11 +160,11 @@ fortaleza mínima y guarda solo un hash, nunca texto plano.
 
 ## Compilación
 
-El binario del servidor lo compila el CI a partir del **upstream [mkj/dropbear](https://github.com/mkj/dropbear)**
+El binario del servidor se compila a partir del **upstream [mkj/dropbear](https://github.com/mkj/dropbear)**
 con un conjunto de parches pequeño y auditable (consulta [`patches/`](patches/)): una cadena de
 identidad neutral/configurable, rutas dirigidas por configuración para `authorized_keys` y el archivo
-de contraseñas, y el arreglo `openpty` de Android para PTY interactivas. Un flujo de trabajo programado
-sigue al upstream y reconstruye, de modo que el módulo se mantiene al día. Consulta
+de contraseñas, y el arreglo `openpty` de Android para PTY interactivas. Los binarios se recompilan
+en local con `scripts/build.sh` y se commitean con su sha256 en `module/bin/PROVENANCE.json`, que el CI comprueba antes de montar el zip. Consulta
 [`.github/workflows/`](.github/workflows/) y [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Documentación

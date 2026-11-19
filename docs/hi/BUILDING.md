@@ -52,7 +52,7 @@ ELF है (`file` बताता है `dynamically linked, interpreter /syst
 bionic libc से लिंक है जो हर Android डिवाइस में पहले से है। libtomcrypt बाइनरी के अंदर एम्बेडेड रहता है; केवल C
 लाइब्रेरी डायनामिक है। देखें [डायनामिक, static-PIE नहीं](#डयनमक-static-pie-नह)।
 
-बाइनरी **कमिट नहीं की जातीं**; उन्हें हर टैग पर CI बनाता है और रिलीज़ के साथ संलग्न करता है। देखें
+बाइनरी `module/bin/<abi>/` में **कमिट की गई हैं**, उनके sha256 `module/bin/PROVENANCE.json` में हैं; CI उन्हें जाँचता है और दोबारा नहीं बनाता। देखें
 [`.gitignore`](../../.gitignore)।
 
 ---

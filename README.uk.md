@@ -158,11 +158,11 @@ root-шелл, SFTP і rsync через мережу, без викриваль�
 
 ## Збирання
 
-Бінарник сервера збирається в CI з **upstream [mkj/dropbear](https://github.com/mkj/dropbear)** з
+Бінарник сервера збирається з **upstream [mkj/dropbear](https://github.com/mkj/dropbear)** з
 невеликим набором патчів, придатних до аудиту (див. [`patches/`](patches/)): нейтральний/налаштовуваний
 рядок ідентифікації, задані в конфізі шляхи до `authorized_keys` і файлу паролів, а також виправлення
-Android `openpty` для інтерактивних PTY. Запланований workflow стежить за upstream і перезбирає
-проєкт, тож модуль лишається актуальним. Див. [`.github/workflows/`](.github/workflows/) і
+Android `openpty` для інтерактивних PTY. Бінарники перезбираються локально через `scripts/build.sh` і
+комітяться разом з їхніми sha256 у `module/bin/PROVENANCE.json`, які CI перевіряє перед складанням zip. Див. [`.github/workflows/`](.github/workflows/) і
 [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Документація

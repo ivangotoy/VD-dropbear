@@ -155,11 +155,11 @@ tidak pernah teks biasa.
 
 ## Build
 
-Biner server dibangun oleh CI dari **upstream [mkj/dropbear](https://github.com/mkj/dropbear)** dengan
+Biner server dibangun dari **upstream [mkj/dropbear](https://github.com/mkj/dropbear)** dengan
 seperangkat patch kecil yang dapat diaudit (lihat [`patches/`](patches/)): string identitas yang
 netral/dapat dikonfigurasi, jalur yang digerakkan konfigurasi untuk `authorized_keys` dan berkas kata
-sandi, serta perbaikan `openpty` Android untuk PTY interaktif. Sebuah workflow terjadwal melacak upstream
-dan membangun ulang, sehingga modul tetap mutakhir. Lihat [`.github/workflows/`](.github/workflows/) dan
+sandi, serta perbaikan `openpty` Android untuk PTY interaktif. Biner dibangun ulang secara lokal dengan `scripts/build.sh`
+dan di-commit beserta sha256-nya di `module/bin/PROVENANCE.json`, yang diperiksa CI sebelum menyusun zip. Lihat [`.github/workflows/`](.github/workflows/) dan
 [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Dokumentasi

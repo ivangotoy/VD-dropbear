@@ -147,10 +147,10 @@ CE を再実装するだけです）。それは偽りの安心感を買うだ�
 
 ## ビルド
 
-サーバーバイナリは **upstream [mkj/dropbear](https://github.com/mkj/dropbear)** から CI によってビルドされ、
+サーバーバイナリは **upstream [mkj/dropbear](https://github.com/mkj/dropbear)** からビルドされ、
 小さく監査可能なパッチ群が当てられています（[`patches/`](patches/)を参照）: 中立／設定可能なアイデンティティ文字列、
 `authorized_keys` とパスワードファイルの設定駆動のパス、そして対話的 PTY のための Android 向け `openpty` 修正です。
-スケジュールされた workflow が upstream を追跡して再ビルドするため、モジュールは常に最新に保たれます。
+バイナリは `scripts/build.sh` でローカルに再ビルドしてコミットされ、その sha256 は `module/bin/PROVENANCE.json` にあり、CI が zip を組み立てる前に検証します。
 [`.github/workflows/`](.github/workflows/) と [`CONTRIBUTING.md`](CONTRIBUTING.md) を参照してください。
 
 ## ドキュメント

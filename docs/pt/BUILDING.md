@@ -52,7 +52,7 @@ ELF **dinâmico** (`file` relata `dynamically linked, interpreter /system/bin/li
 24`), ligado contra a libc bionic que todo dispositivo Android já tem. O libtomcrypt fica embutido
 dentro do binário; só a biblioteca C é dinâmica. Veja [Dinâmico, não static-PIE](#dinâmico-não-static-pie).
 
-Os binários **não são commitados**; são compilados pela CI a cada tag e anexados à release.
+Os binários **são commitados** em `module/bin/<abi>/`, com seu sha256 em `module/bin/PROVENANCE.json`; a CI os verifica e não os recompila.
 Veja [`.gitignore`](../../.gitignore).
 
 ---

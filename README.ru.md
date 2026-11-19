@@ -159,11 +159,11 @@ CE). Это дало бы ложное чувство безопасности, 
 
 ## Сборка
 
-Бинарник сервера собирается в CI из **upstream [mkj/dropbear](https://github.com/mkj/dropbear)** с
+Бинарник сервера собирается из **upstream [mkj/dropbear](https://github.com/mkj/dropbear)** с
 небольшим, поддающимся аудиту набором патчей (см. [`patches/`](patches/)): нейтральная/настраиваемая
 строка идентификации, задаваемые в конфиге пути к `authorized_keys` и файлу паролей, а также
-исправление Android `openpty` для интерактивных PTY. Запланированный workflow отслеживает upstream и
-пересобирает проект, поэтому модуль остаётся актуальным. См. [`.github/workflows/`](.github/workflows/)
+исправление Android `openpty` для интерактивных PTY. Бинарники пересобираются локально через `scripts/build.sh` и
+коммитятся вместе с их sha256 в `module/bin/PROVENANCE.json`, которые CI проверяет перед сборкой zip. См. [`.github/workflows/`](.github/workflows/)
 и [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Документация

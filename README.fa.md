@@ -154,10 +154,10 @@ rsync روی شبکه، بدون نشانه‌ی `adb_enabled`، بدون پرچ
 
 ## ساخت
 
-باینری سرور توسط CI از **آپستریم [mkj/dropbear](https://github.com/mkj/dropbear)** با یک مجموعه‌پچ کوچک
+باینری سرور از **آپستریم [mkj/dropbear](https://github.com/mkj/dropbear)** با یک مجموعه‌پچ کوچک
 و قابل‌ممیزی ساخته می‌شود (نگاه کن به [`patches/`](patches/)): یک رشته‌ی هویت خنثی/قابل‌پیکربندی،
 مسیرهای پیکربندی‌محور برای `authorized_keys` و فایل رمز عبور، و اصلاح `openpty` اندروید برای PTYهای
-تعاملی. یک گردش‌کار زمان‌بندی‌شده آپستریم را دنبال و بازسازی می‌کند، پس ماژول به‌روز می‌ماند. نگاه کن به
+تعاملی. باینری‌ها به‌صورت محلی با `scripts/build.sh` بازسازی و همراه با sha256 خود در `module/bin/PROVENANCE.json` کامیت می‌شوند و CI پیش از ساختن zip آن‌ها را بررسی می‌کند. نگاه کن به
 [`.github/workflows/`](.github/workflows/) و [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## مستندات

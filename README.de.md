@@ -163,11 +163,11 @@ einen Hash, nie Klartext.
 
 ## Build
 
-Die Server-Binärdatei wird per CI aus dem **Upstream [mkj/dropbear](https://github.com/mkj/dropbear)**
+Die Server-Binärdatei wird aus dem **Upstream [mkj/dropbear](https://github.com/mkj/dropbear)**
 gebaut, mit einem kleinen, prüfbaren Patch-Satz (siehe [`patches/`](patches/)): einer
 neutralen/konfigurierbaren Identitätszeichenfolge, konfigurationsgesteuerten Pfaden für
-`authorized_keys` und die Passwortdatei sowie dem Android-`openpty`-Fix für interaktive PTYs. Ein
-geplanter Workflow verfolgt den Upstream und baut neu, sodass das Modul aktuell bleibt. Siehe
+`authorized_keys` und die Passwortdatei sowie dem Android-`openpty`-Fix für interaktive PTYs. Die
+Binaries werden lokal mit `scripts/build.sh` neu gebaut und committet, mit ihren sha256 in `module/bin/PROVENANCE.json`, die die CI vor dem Zusammenstellen des Zips prüft. Siehe
 [`.github/workflows/`](.github/workflows/) und [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Dokumentation

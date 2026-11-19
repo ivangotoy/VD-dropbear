@@ -45,7 +45,7 @@ module/                     the installable module
   webroot/
     index.html              the WebUI
     assets/                 logos
-  bin/<abi>/                CI-built binaries (not committed)
+  bin/<abi>/                committed binaries (sha256 in bin/PROVENANCE.json)
   META-INF/                 Magisk/KSU installer stub
 patches/                    auditable patches vs upstream Dropbear + localoptions.h
 scripts/

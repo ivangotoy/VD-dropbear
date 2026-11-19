@@ -53,7 +53,7 @@ Keluarannya adalah ELF **dinamis** (`file` melaporkan `dynamically linked, inter
 perangkat Android. libtomcrypt tetap tertanam di dalam biner; hanya pustaka C yang dinamis. Lihat
 [Dinamis, bukan static-PIE](#dinamis-bukan-static-pie).
 
-Biner **tidak di-commit**; keduanya dibangun oleh CI pada setiap tag dan dilampirkan ke rilis. Lihat
+Biner **di-commit** di `module/bin/<abi>/`, dengan sha256-nya di `module/bin/PROVENANCE.json`; CI memeriksanya dan tidak membangunnya ulang. Lihat
 [`.gitignore`](../../.gitignore).
 
 ---

@@ -52,7 +52,7 @@ uygular, sonra `vddropbear` ve `dropbearkey`'i `module/bin/<abi>/` içine çapra
 for Android 24`), her Android cihazın zaten sahip olduğu bionic libc'ye bağlanmış. libtomcrypt ikili
 dosyanın içinde gömülü kalır; yalnızca C kütüphanesi dinamiktir. Bkz. [Dinamik, static-PIE değil](#dinamik-static-pie-değil).
 
-İkili dosyalar **commit edilmez**; her etikette CI tarafından derlenir ve sürüme eklenir. Bkz.
+İkili dosyalar `module/bin/<abi>/` altında **commit edilmiştir**; sha256 değerleri `module/bin/PROVENANCE.json` içindedir; CI bunları denetler, yeniden derlemez. Bkz.
 [`.gitignore`](../../.gitignore).
 
 ---

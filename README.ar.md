@@ -148,10 +148,10 @@ VD Dropbear هو البديل الخاص. على جهاز مروّت يمنحك 
 
 ## البناء
 
-يُبنى الملف الثنائي للخادم عبر CI من **مصدر [mkj/dropbear](https://github.com/mkj/dropbear)** مع
+يُبنى الملف الثنائي للخادم من **مصدر [mkj/dropbear](https://github.com/mkj/dropbear)** مع
 مجموعة تعديلات صغيرة قابلة للتدقيق (راجع [`patches/`](patches/)): سلسلة هوية محايدة/قابلة للتهيئة،
 ومسارات مدفوعة بالتهيئة لـ `authorized_keys` وملف كلمة المرور، وإصلاح `openpty` الخاص بأندرويد لأجهزة
-PTY التفاعلية. يتتبع سير عمل مجدول المصدر ويعيد البناء، فتبقى الوحدة محدَّثة. راجع
+PTY التفاعلية. تُعاد بناء الملفات الثنائية محليًا باستخدام `scripts/build.sh` وتُودع (commit) مع قيم sha256 الخاصة بها في `module/bin/PROVENANCE.json`، ويتحقق منها CI قبل تجميع ملف zip. راجع
 [`.github/workflows/`](.github/workflows/) و[`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## التوثيق

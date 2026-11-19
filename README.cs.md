@@ -154,11 +154,11 @@ otevřený text.
 
 ## Sestavení
 
-Binárku serveru sestavuje CI z **upstreamu [mkj/dropbear](https://github.com/mkj/dropbear)** s malou,
+Binárka serveru se sestavuje z **upstreamu [mkj/dropbear](https://github.com/mkj/dropbear)** s malou,
 auditovatelnou sadou patchů (viz [`patches/`](patches/)): neutrální/konfigurovatelný identifikační
 řetězec, cesty řízené konfigurací pro `authorized_keys` a soubor s hesly a androidí oprava `openpty`
-pro interaktivní PTY. Naplánovaný workflow sleduje upstream a sestavuje znovu, takže modul zůstává
-aktuální. Viz [`.github/workflows/`](.github/workflows/) a [`CONTRIBUTING.md`](CONTRIBUTING.md).
+pro interaktivní PTY. Binárky se sestavují lokálně pomocí `scripts/build.sh` a commitují se i se svými sha256 v
+`module/bin/PROVENANCE.json`, které CI ověří před sestavením zipu. Viz [`.github/workflows/`](.github/workflows/) a [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Dokumentace
 

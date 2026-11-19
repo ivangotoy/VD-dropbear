@@ -52,7 +52,7 @@ křížově zkompiluje `vddropbear` a `dropbearkey` do `module/bin/<abi>/`. Výs
 bionic libc, kterou každé zařízení s Androidem už má. libtomcrypt zůstává vestavěný v binárce; dynamická
 je jen knihovna C. Viz [Dynamický, ne static-PIE](#dynamický-ne-static-pie).
 
-Binárky se **necommitují**; sestavuje je CI při každém tagu a připojuje je k vydání. Viz
+Binárky **jsou commitnuté** v `module/bin/<abi>/` se svými sha256 v `module/bin/PROVENANCE.json`; CI je ověřuje a znovu nesestavuje. Viz
 [`.gitignore`](../../.gitignore).
 
 ---

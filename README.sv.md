@@ -156,11 +156,11 @@ en hash, aldrig klartext.
 
 ## Bygge
 
-Serverbinären byggs av CI från **uppströms [mkj/dropbear](https://github.com/mkj/dropbear)** med en
+Serverbinären byggs från **uppströms [mkj/dropbear](https://github.com/mkj/dropbear)** med en
 liten, granskningsbar uppsättning patchar (se [`patches/`](patches/)): en neutral/konfigurerbar
 identitetssträng, konfigurationsstyrda sökvägar för `authorized_keys` och lösenordsfilen, samt
-Android-fixen för `openpty` för interaktiva PTY:er. Ett schemalagt arbetsflöde följer uppströms och
-bygger om, så att modulen hålls aktuell. Se [`.github/workflows/`](.github/workflows/) och
+Android-fixen för `openpty` för interaktiva PTY:er. Binärerna byggs om lokalt med `scripts/build.sh` och
+committas, med sin sha256 i `module/bin/PROVENANCE.json`, som CI kontrollerar innan zip-filen sätts ihop. Se [`.github/workflows/`](.github/workflows/) och
 [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Dokumentation

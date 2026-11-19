@@ -152,10 +152,10 @@ je wel een wachtwoord instelt, dwingt de WebUI een minimale sterkte af en bewaar
 
 ## Build
 
-Het serverbinaire wordt door CI gebouwd uit **upstream [mkj/dropbear](https://github.com/mkj/dropbear)** met een
+Het serverbinaire wordt gebouwd uit **upstream [mkj/dropbear](https://github.com/mkj/dropbear)** met een
 kleine, controleerbare set patches (zie [`patches/`](patches/)): een neutrale/configureerbare identiteitsstring,
 config-gestuurde paden voor `authorized_keys` en het wachtwoordbestand, en de Android-`openpty`-fix voor
-interactieve PTY's. Een geplande workflow volgt upstream en bouwt opnieuw, zodat de module actueel blijft. Zie
+interactieve PTY's. De binaries worden lokaal opnieuw gebouwd met `scripts/build.sh` en gecommit, met hun sha256 in `module/bin/PROVENANCE.json`, die de CI controleert voordat ze de zip samenstelt. Zie
 [`.github/workflows/`](.github/workflows/) en [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Documentatie

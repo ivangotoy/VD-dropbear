@@ -151,11 +151,11 @@ rsync, बिना किसी `adb_enabled` संकेत के, बिन
 
 ## बिल्ड
 
-सर्वर बाइनरी को CI द्वारा **अपस्ट्रीम [mkj/dropbear](https://github.com/mkj/dropbear)** से एक छोटे, ऑडिट
+सर्वर बाइनरी को **अपस्ट्रीम [mkj/dropbear](https://github.com/mkj/dropbear)** से एक छोटे, ऑडिट
 करने योग्य पैच सेट के साथ बनाया जाता है (देखें [`patches/`](patches/)): एक तटस्थ/कॉन्फ़िगर करने योग्य पहचान
 स्ट्रिंग, `authorized_keys` और पासवर्ड फ़ाइल के लिए कॉन्फ़िग-संचालित पथ, और इंटरैक्टिव PTY के लिए Android का
-`openpty` फ़िक्स। एक शेड्यूल्ड वर्कफ़्लो अपस्ट्रीम पर नज़र रखता है और दोबारा बिल्ड करता है, ताकि मॉड्यूल अद्यतन
-बना रहे। देखें [`.github/workflows/`](.github/workflows/) और [`CONTRIBUTING.md`](CONTRIBUTING.md).
+`openpty` फ़िक्स। बाइनरी `scripts/build.sh` से स्थानीय रूप से दोबारा बिल्ड करके कमिट की जाती हैं, उनके sha256 के साथ
+`module/bin/PROVENANCE.json` में, जिन्हें CI zip बनाने से पहले जाँचता है। देखें [`.github/workflows/`](.github/workflows/) और [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## प्रलेखन
 

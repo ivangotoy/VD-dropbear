@@ -52,7 +52,7 @@ luego compila de forma cruzada `vddropbear` y `dropbearkey` en `module/bin/<abi>
 enlazado contra la libc bionic que todo dispositivo Android ya tiene. libtomcrypt queda incrustado
 dentro del binario; solo la biblioteca C es dinámica. Véase [Dinámico, no static-PIE](#dinámico-no-static-pie).
 
-Los binarios **no se commitean**; los compila la CI en cada etiqueta y se adjuntan a la release.
+Los binarios **están commiteados** en `module/bin/<abi>/`, con su sha256 en `module/bin/PROVENANCE.json`; la CI los comprueba y no los recompila.
 Véase [`.gitignore`](../../.gitignore).
 
 ---

@@ -52,7 +52,7 @@ ABIS="arm64-v8a" ./scripts/build.sh
 具备的 bionic libc。libtomcrypt 仍嵌入在二进制内部；只有 C 库是动态的。参见
 [动态，而非 static-PIE](#动态而非-static-pie)。
 
-二进制 **不被提交**；它们由 CI 在每个标签上构建并附加到发布。参见 [`.gitignore`](../../.gitignore)。
+二进制 **已提交** 在 `module/bin/<abi>/` 中，其 sha256 记录在 `module/bin/PROVENANCE.json`；CI 只校验，不重新构建。参见 [`.gitignore`](../../.gitignore)。
 
 ---
 

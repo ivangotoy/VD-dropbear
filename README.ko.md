@@ -145,10 +145,10 @@ KernelSU, APatch 또는 Magisk 매니저에서 모듈 zip을 플래시하거나(
 
 ## 빌드
 
-서버 바이너리는 **upstream [mkj/dropbear](https://github.com/mkj/dropbear)**에서 CI가 빌드하며, 작고 감사 가능한
+서버 바이너리는 **upstream [mkj/dropbear](https://github.com/mkj/dropbear)**에서 빌드되며, 작고 감사 가능한
 패치 세트가 적용됩니다([`patches/`](patches/) 참조): 중립적/설정 가능한 아이덴티티 문자열, `authorized_keys`와
-비밀번호 파일을 위한 설정 기반 경로, 그리고 대화형 PTY를 위한 안드로이드 `openpty` 수정입니다. 예약된 workflow가
-upstream을 추적하여 다시 빌드하므로 모듈은 항상 최신 상태로 유지됩니다. [`.github/workflows/`](.github/workflows/)와
+비밀번호 파일을 위한 설정 기반 경로, 그리고 대화형 PTY를 위한 안드로이드 `openpty` 수정입니다. 바이너리는
+`scripts/build.sh`로 로컬에서 다시 빌드해 커밋하며, sha256은 `module/bin/PROVENANCE.json`에 있고 CI가 zip을 만들기 전에 검증합니다. [`.github/workflows/`](.github/workflows/)와
 [`CONTRIBUTING.md`](CONTRIBUTING.md)를 참조하세요.
 
 ## 문서

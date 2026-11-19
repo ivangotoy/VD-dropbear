@@ -52,8 +52,8 @@ cross-compileert dan `vddropbear` en `dropbearkey` naar `module/bin/<abi>/`. De 
 24`), gelinkt tegen de bionic-libc die elk Android-toestel al heeft. libtomcrypt blijft ingebed in het
 binary; alleen de C-bibliotheek is dynamisch. Zie [Dynamisch, geen static-PIE](#dynamisch-geen-static-pie).
 
-De binaries worden **niet gecommit**; ze worden bij elke tag door de CI gebouwd en aan de release
-gehecht. Zie [`.gitignore`](../../.gitignore).
+De binaries zijn **gecommit** in `module/bin/<abi>/`, met hun sha256 in `module/bin/PROVENANCE.json`; de CI controleert
+ze daartegen en bouwt ze niet opnieuw. Zie [`.gitignore`](../../.gitignore).
 
 ---
 

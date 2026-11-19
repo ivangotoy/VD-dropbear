@@ -155,11 +155,11 @@ không bao giờ lưu văn bản thuần.
 
 ## Build
 
-Tệp nhị phân của máy chủ được CI build từ **upstream [mkj/dropbear](https://github.com/mkj/dropbear)**
+Tệp nhị phân của máy chủ được build từ **upstream [mkj/dropbear](https://github.com/mkj/dropbear)**
 với một bộ patch nhỏ, có thể kiểm tra được (xem [`patches/`](patches/)): một chuỗi định danh
 trung lập/có thể cấu hình, các đường dẫn do cấu hình điều khiển cho `authorized_keys` và tệp mật khẩu,
-cùng bản sửa `openpty` của Android cho các PTY tương tác. Một workflow theo lịch sẽ theo dõi upstream
-và build lại, nhờ đó mô-đun luôn được cập nhật. Xem [`.github/workflows/`](.github/workflows/) và
+cùng bản sửa `openpty` của Android cho các PTY tương tác. Các tệp nhị phân được build lại cục bộ bằng `scripts/build.sh`
+và được commit cùng sha256 của chúng trong `module/bin/PROVENANCE.json`, được CI kiểm tra trước khi đóng gói zip. Xem [`.github/workflows/`](.github/workflows/) và
 [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Tài liệu
