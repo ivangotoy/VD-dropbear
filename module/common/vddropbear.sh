@@ -277,7 +277,7 @@ vddb_pid_alive() {
     _st="$(cat "/proc/$1/stat" 2>/dev/null)"; _st="${_st##*) }"
     case "$_st" in Z*|X*|'') return 1 ;; esac
     [ "$(cat "/proc/$1/comm" 2>/dev/null)" = "$VDDB_PROC" ] && return 0
-    tr '\0' '\n' < "/proc/$1/cmdline" 2>/dev/null | grep -qxF "$VDDB_PIDFILE"
+    tr '\0' '\n' 2>/dev/null < "/proc/$1/cmdline" | grep -qxF "$VDDB_PIDFILE"
 }
 vddb_pid() {
     _p="$(cat "$VDDB_PIDFILE" 2>/dev/null)"
@@ -329,7 +329,8 @@ vddb_listen_summary() {
 vddb_spawn() {
     mkdir -p "$VDDB_STATE" 2>/dev/null
     # the daemon appends every connection and auth attempt: keep one old copy past 1 MiB
-    [ "$(wc -c < "$VDDB_LOG" 2>/dev/null || echo 0)" -gt 1048576 ] 2>/dev/null && mv -f "$VDDB_LOG" "$VDDB_LOG.1" 2>/dev/null
+    [ -f "$VDDB_LOG" ] && [ "$(wc -c 2>/dev/null < "$VDDB_LOG")" -gt 1048576 ] 2>/dev/null \
+        && mv -f "$VDDB_LOG" "$VDDB_LOG.1" 2>/dev/null
     vddb_export_env
     # Word-splitting here is intentional: every token is a flag or a normalised
     # value (PORT, HOSTKEY_TYPE and RECEIVE_WINDOW are validated in

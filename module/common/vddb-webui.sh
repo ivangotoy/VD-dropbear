@@ -126,7 +126,7 @@ case "$1" in
         _v=$(printf '%s' "$_v" | tr -d '\r')
         printf '%s=%s\n' "$_k" "$(_sq "$_v")"
       done
-    } > "$_new" 2>/dev/null || { rm -f "$_new"; die "write failed"; }
+    } 2>/dev/null > "$_new" || { rm -f "$_new"; die "write failed"; }
     # must contain at least one real key or we refuse to clobber the config
     grep -q '^[A-Z]' "$_new" || { rm -f "$_new"; die "no valid keys"; }
     mv "$_new" "$VDDB_CONFIG" 2>/dev/null || { rm -f "$_new"; die "install failed"; }

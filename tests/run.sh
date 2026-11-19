@@ -278,10 +278,11 @@ t_webui_write_failure() {
     expect_eq "$(cat "$CE/passwd")" "$p" || return 1
     expect_eq "$(ls "$CE" | grep -c tmp)" 0 || return 1
     chmod 500 "$DATA"
-    out=$(webui_in "PORT=2299" set-config 2>/dev/null); rc=$?
+    out=$(webui_in "PORT=2299" set-config 2>"$W/err"); rc=$?
     chmod 700 "$DATA"
     expect_has "$out" "err: " || return 1
-    [ "$rc" != 0 ] || fail "set-config: exit 0 on error"
+    [ "$rc" != 0 ] || { fail "set-config: exit 0 on error"; return 1; }
+    expect_eq "$(cat "$W/err")" ""
 }
 # F5: switching START_IN_BFU in the WebUI moves the secrets to the other store,
 # never overwrites a secret already there, and a plain start moves nothing
@@ -370,6 +371,14 @@ t_log_rotated() {
     [ "$(wc -c < "$DATA/state/daemon.log.1")" -ge 1126400 ] || fail "small log rotated over the old copy"
 }
 # F10: EXTRA_ENV values are taken literally, not glob-expanded against the cwd
+# F8b: the first start with no daemon.log yet must not print errors
+t_start_without_log_quiet() {
+    cfg PORT=2299
+    mkdir -p "$CE"; printf 'FAKEKEY ed25519\n' > "$CE/hostkey_ed25519"
+    rm -f "$DATA/state/daemon.log"
+    err=$(sh "$MOD/action.sh" 2>&1 >/dev/null)
+    expect_eq "$err" ""
+}
 t_extra_env_no_glob() {
     cfg "EXTRA_ENV='FOO=*'"
     mkdir -p "$W/cwd"; : > "$W/cwd/FOO=expanded"
@@ -546,7 +555,7 @@ t_uninstall() {
 
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_write_failure t_bfu_toggle_moves_secrets t_webui_status
-t_action_start t_empty_hostkey_regenerated t_log_rotated t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
+t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
 t_service_disabled t_customize t_uninstall"
 
 for c in $CASES; do run_case "$c"; done
