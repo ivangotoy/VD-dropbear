@@ -659,10 +659,48 @@ EOF
     return 0
 }
 
+# module-ci.sh build: whatever the build user started is killed after the build, failed or not.
+# setpriv and chown are stubs: the stub records a kill and never runs it (here the test user may
+# well be the build uid, and `kill -9 -1` would end this session). Needs bash and git (else SKIP).
+t_build_kills_build_user() {
+    command -v bash >/dev/null 2>&1 && command -v git >/dev/null 2>&1 || return 77
+    cat > "$STUB/setpriv" <<'EOF'
+#!/bin/sh
+case " $* " in *" kill "*) echo "kill-requested $*" >> "$SETPRIV_LOG"; exit 0 ;; esac
+while [ $# -gt 0 ]; do case "$1" in --*) shift ;; *) break ;; esac; done
+exec "$@"
+EOF
+    printf '#!/bin/sh\nexit 0\n' > "$STUB/chown"
+    chmod 755 "$STUB/setpriv" "$STUB/chown"
+    [ "$(PATH="$STUB:$PATH" command -v setpriv)" = "$STUB/setpriv" ] || { fail "setpriv stub not first on PATH, not run"; return 1; }
+    for _k in ok failed; do
+        _b=$W/build-$_k; mkdir -p "$_b/.forgejo"
+        cp "$REPO/.forgejo/module-ci.sh" "$_b/.forgejo/"
+        if [ "$_k" = ok ]; then
+            printf 'build() { echo zip > "$OUT/module.zip"; }\n' > "$_b/.forgejo/module-ci.conf"
+        else
+            printf 'build() { echo "stub build failed" >&2; return 1; }\n' > "$_b/.forgejo/module-ci.conf"
+        fi
+        (cd "$_b" && git init -q && git add -A && git -c user.name=t -c user.email=t@example.invalid commit -qm t) > /dev/null 2>&1
+        : > "$_b/setpriv.log"
+        _rc=0
+        (cd "$_b" && env PATH="$STUB:$PATH" SETPRIV_LOG="$_b/setpriv.log" SERVER_URL=https://forge.invalid \
+            REPOSITORY=owner/repo BASE_SHA="$(git rev-parse HEAD)" bash .forgejo/module-ci.sh build "$_b") > "$_b/out.log" 2>&1 || _rc=$?
+        if [ "$_k" = ok ]; then
+            [ "$_rc" = 0 ] && [ -f "$_b/.ci-out/module.zip" ] || { fail "($_k) rc=$_rc: $(tail -n 2 "$_b/out.log" | tr '\n' ' ')"; return 1; }
+        else
+            [ "$_rc" != 0 ] && grep -q "stub build failed" "$_b/out.log" || { fail "($_k) rc=$_rc: $(tail -n 2 "$_b/out.log" | tr '\n' ' ')"; return 1; }
+        fi
+        grep -q "unbound variable" "$_b/out.log" && { fail "($_k) unbound variable"; return 1; }
+        grep -q 'kill-requested .*--reuid=1000 .*kill -9 -1' "$_b/setpriv.log" || { fail "($_k) build user's processes not killed"; return 1; }
+    done
+    return 0
+}
+
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_webui_status
 t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
-t_service_disabled t_customize t_uninstall t_build_fetch_partial t_release_cleanup_keeps_published"
+t_service_disabled t_customize t_uninstall t_build_fetch_partial t_release_cleanup_keeps_published t_build_kills_build_user"
 
 for c in $CASES; do run_case "$c"; done
 echo "summary: pass=$PASS fail=$FAIL skip=$SKIP${FAILED:+ failed:$FAILED}"
