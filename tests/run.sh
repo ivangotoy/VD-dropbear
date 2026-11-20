@@ -708,10 +708,55 @@ EOF
     return 0
 }
 
+# module-release.yml: the job builds the dispatched commit even when main has moved since. The
+# steps whose run text clones or calls `module-ci.sh build` run against a local bare repo whose
+# main has a commit after BASE_SHA; the fixture's .forgejo/module-ci.sh is a marker script that
+# records which commit's copy ran. Run blocks are read without PyYAML. Needs python3 and git.
+t_workflow_builds_dispatched_commit() {
+    command -v python3 >/dev/null 2>&1 && command -v git >/dev/null 2>&1 || return 77
+    _wf=$W/workflow
+    mkdir -p "$_wf/job" "$_wf/forge/owner" "$_wf/seed/.forgejo"
+    git init -q --bare "$_wf/forge/owner/repo.git" && git init -q "$_wf/seed" || { fail "fixture repos"; return 1; }
+    for _c in dispatched later-on-main; do
+        printf '#!/bin/sh\necho "%s $*" >> "$MARKER_LOG"\n' "$_c" > "$_wf/seed/.forgejo/module-ci.sh"
+        (cd "$_wf/seed" && git add -A && git -c user.name=t -c user.email=t@example.invalid commit -qm "$_c") || { fail "fixture commit"; return 1; }
+        [ "$_c" = dispatched ] && _base=$(git -C "$_wf/seed" rev-parse HEAD)
+    done
+    git -C "$_wf/seed" push -q "$_wf/forge/owner/repo.git" HEAD:refs/heads/main || { fail "fixture push"; return 1; }
+    python3 -I - "$REPO/.forgejo/workflows/module-release.yml" > "$_wf/steps.sh" <<'PY'
+import re, sys
+steps, cur = [], None
+for l in open(sys.argv[1]).read().split("\n"):
+    if re.match(r"^      - name:", l):
+        cur = {"run": [], "in": False}; steps.append(cur); continue
+    if cur is None:
+        continue
+    if re.match(r"^        run: \|\s*$", l):
+        cur["in"] = True; continue
+    m = re.match(r"^        run: (.+)$", l)
+    if m:
+        cur["run"].append(m.group(1)); continue
+    if cur["in"]:
+        if l.startswith("          ") or not l.strip():
+            cur["run"].append(l[10:])
+        else:
+            cur["in"] = False
+for st in steps:
+    text = "\n".join(st["run"])
+    if "git clone" in text or "module-ci.sh build" in text:
+        print("(\n" + text + "\n)")
+PY
+    : > "$_wf/marker.log"
+    (cd "$_wf/job" && env SERVER_URL="file://$_wf/forge" REPOSITORY=owner/repo BASE_SHA="$_base" \
+        MARKER_LOG="$_wf/marker.log" sh "$_wf/steps.sh") > "$_wf/out.log" 2>&1 || { fail "steps failed: $(tail -n 2 "$_wf/out.log" | tr '\n' ' ')"; return 1; }
+    expect_eq "$(git -C "$_wf/job/src" rev-parse HEAD)" "$_base" || return 1
+    expect_eq "$(cat "$_wf/marker.log")" "dispatched build src"
+}
+
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_webui_status
 t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
-t_service_disabled t_customize t_uninstall t_build_fetch_partial t_release_cleanup_keeps_published t_build_kills_build_user"
+t_service_disabled t_customize t_uninstall t_build_fetch_partial t_release_cleanup_keeps_published t_build_kills_build_user t_workflow_builds_dispatched_commit"
 
 for c in $CASES; do run_case "$c"; done
 echo "summary: pass=$PASS fail=$FAIL skip=$SKIP${FAILED:+ failed:$FAILED}"
