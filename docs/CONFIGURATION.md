@@ -41,7 +41,7 @@ Apply changes by restarting the daemon (the WebUI's **Save & restart** does this
 | Key | Default | Meaning |
 |-----|---------|---------|
 | `ENABLED` | `1` | Start the daemon at boot. `0` disables it entirely. |
-| `START_IN_BFU` | `0` | `0`: start only after first unlock (AFU); secrets stay on credential-encrypted (CE) storage. `1`: also start before first unlock (BFU); secrets move to device-encrypted (DE) storage, readable before unlock. Switching it in the WebUI moves the host key, `authorized_keys` and `passwd` to the other store (with the device unlocked; a file already in the target store is kept). A hand edit of this file moves nothing. |
+| `START_IN_BFU` | `0` | `0`: start only after first unlock (AFU); secrets stay on credential-encrypted (CE) storage. `1`: also start before first unlock (BFU); secrets move to device-encrypted (DE) storage, readable before unlock. Switching it in the WebUI moves the host key, `authorized_keys` and `passwd` to the other store (with the device unlocked; a file already in the target store is kept). If they cannot be moved, the save fails with `err: secrets not moved` and nothing changes. A hand edit of this file moves nothing. |
 | `PORT` | `2222` | Default listening port (per-bind ports can override it in `LISTEN_ADDRESSES`). The WebUI accepts 1-65535 only. |
 
 ## Listening / binds (composable)

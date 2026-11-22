@@ -39,6 +39,16 @@ module (`module.prop`) and on GitHub Releases.
   aborted and apps died at launch with no crash record until a reboot. The pid file now lives in the module
   state dir. Reported and fixed by Konstantin Nikiforov (@helllamer, GitHub PR #2).
 
+### Fixed (Forgejo fork build)
+- The fork's zip now carries the per-file `.sha256` companions that the v1.10 flash-time integrity gate checks;
+  without them the gate had nothing to check.
+- Switching START_IN_BFU in the WebUI fails with `err: secrets not moved` and changes nothing when the secrets
+  cannot be moved (CE storage locked, target store not writable, a file that cannot be copied), instead of
+  saving the new mode and leaving the secrets in the old store.
+- Release CI: forge reads are time-bounded so a slow forge fails the run inside the job timeout; a lost reply to
+  the publish request no longer fails a release the forge did publish; a failure after the publish logs the
+  recovery (the `update.json` to commit, or the release to delete).
+
 ## [v1.10] (2026-11-19)
 
 ### Added
