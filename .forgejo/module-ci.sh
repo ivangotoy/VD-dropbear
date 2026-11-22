@@ -50,7 +50,6 @@ sedq() { printf '%s' "$1" | sed 's/[\\|&]/\\&/g'; }  # text for the replacement 
 jget() { python3 -I -c 'import json,sys;d=json.load(sys.stdin)
 for k in sys.argv[1].split("."): d=d[int(k)] if k.isdigit() else d[k]
 print(d)' "$1"; }
-pack_paths() { (cd "$WORK" && zip -qr9 -X "$OUT/module.zip" "$@" -x '*/.gitkeep'); }
 load_conf() {
     UPSTREAM_URL="" UPSTREAM_BRANCH="" ZIP_PREFIX="${REPOSITORY#*/}" VERSION_CODE_FLOOR=0 VERSION_CODE_OFFSET=0
     UPDATE_JSON_PATH=".forgejo/update.json" SYNC_ROOT_PROP="" CHANGELOG_PATH=""
