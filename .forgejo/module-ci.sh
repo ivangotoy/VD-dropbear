@@ -11,7 +11,8 @@
 # deletes the draft once the forge confirms it is still one (a lost reply to the
 # draft request is logged instead). The merge with upstream is pushed to main right before the
 # publish call, so a failure before that push pushes nothing, and a failed
-# publish leaves the merge on main (without a release).
+# publish leaves the merge on main (without a release). A failure after the
+# publish logs the recovery: the update.json to commit, or the release to delete.
 #
 # Per-repo settings: .forgejo/module-ci.conf (sourced shell)
 #   UPSTREAM_URL, UPSTREAM_BRANCH   upstream merged into main ("" = none)
@@ -191,6 +192,13 @@ if [ -n "$CHANGELOG_PATH" ] && git cat-file -e "$SRC_SHA:$CHANGELOG_PATH" 2>/dev
     CHANGELOG_URL="$SERVER_URL/$REPOSITORY/raw/commit/$SRC_SHA/$CHANGELOG_PATH"
 fi
 log "version $VERSION versionCode $VC tag $TAG"
+# the update.json main gets once the release is published (cleanup() prints it for a manual fix)
+python3 -I - "$REL/update.json" "$VERSION" "$VC" "$ZIP_URL" "$CHANGELOG_URL" <<'PY'
+import json, sys
+path, version, vc, zip_url, changelog = sys.argv[1:]
+with open(path, "w") as f:
+    f.write(json.dumps({"version": version, "versionCode": int(vc), "zipUrl": zip_url, "changelog": changelog}, indent=2) + "\n")
+PY
 
 python3 -I - "$REL/module.zip" "$REL/$ZIP_NAME" "$VERSION" "$VC" "$UPDATE_URL" <<'PY'
 import hashlib, sys, zipfile
@@ -243,7 +251,7 @@ unzip -tq "$ZIP" >/dev/null || die "zip test failed"
 ZIP_SHA="$(sha "$ZIP")"
 log "zip $ZIP_NAME sha256 $ZIP_SHA"
 
-RELEASE_ID="" PUBLISHED=0 DRAFT_REQUESTED=0
+RELEASE_ID="" PUBLISHED=0 DRAFT_REQUESTED=0 CHECKED=0
 cleanup() {
     rc=$?
     if [ "$rc" -ne 0 ] && [ -z "$RELEASE_ID" ] && [ "$DRAFT_REQUESTED" = 1 ]; then
@@ -258,6 +266,16 @@ cleanup() {
             api DELETE "/releases/$RELEASE_ID" >/dev/null || true
         else
             log "failure: release $RELEASE_ID not deleted (draft state '${draft:-unreadable}'): check it by hand"
+        fi
+    fi
+    if [ "$rc" -ne 0 ] && [ "$PUBLISHED" = 1 ]; then
+        # the release is public: say how to bring the update feed in line with it
+        if [ "$CHECKED" = 1 ]; then
+            log "failure after publishing $TAG: $UPDATE_URL did not confirm versionCode $VC"
+            log "recovery: unless it answers $VC by now, commit $UPDATE_JSON_PATH on main with the content below, or dispatch the workflow again (it releases under a new tag)"
+            cat "$REL/update.json" >&2
+        else
+            log "failure after publishing $TAG: the published release failed the check above: delete release $TAG and tag $TAG by hand ($UPDATE_JSON_PATH on main still names the previous release)"
         fi
     fi
     rm -rf "$AUTH_DIR"
@@ -297,18 +315,14 @@ TAG_SHA="$(api GET "/tags/$TAG" | jget commit.sha)"
 [ "$TAG_SHA" = "$SRC_SHA" ] || die "published tag $TAG points at $TAG_SHA, expected $SRC_SHA"
 for i in 1 2 3 4 5; do curl -fsSL --connect-timeout 30 --max-time 180 -o "$REL/anon.zip" "$ZIP_URL" && break; sleep 5; done
 [ "$(sha "$REL/anon.zip")" = "$ZIP_SHA" ] || die "anonymous download of $ZIP_URL differs"
+CHECKED=1
 log "published $TAG"
 
 # update.json (and the fork-owned module.prop) in main
 git_auth fetch -q origin main
 git checkout -q -B main FETCH_HEAD
 mkdir -p "$(dirname "$UPDATE_JSON_PATH")"
-python3 -I - "$UPDATE_JSON_PATH" "$VERSION" "$VC" "$ZIP_URL" "$CHANGELOG_URL" <<'PY'
-import json, sys
-path, version, vc, zip_url, changelog = sys.argv[1:]
-with open(path, "w") as f:
-    f.write(json.dumps({"version": version, "versionCode": int(vc), "zipUrl": zip_url, "changelog": changelog}, indent=2) + "\n")
-PY
+cp "$REL/update.json" "$UPDATE_JSON_PATH"
 git add -- "$UPDATE_JSON_PATH"
 if declare -F release_files >/dev/null; then
     RELEASE_FILES="" ZIP_SIZE="$(stat -c %s "$ZIP")"

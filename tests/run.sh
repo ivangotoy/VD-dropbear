@@ -715,7 +715,7 @@ t_release_cleanup_keeps_published() {
     {
         echo 'set -euo pipefail'
         echo 'API=https://forge.invalid/api/v1/repos/example/mod RELEASE_ID=7 PUBLISHED=0 SRC_SHA=0123456789abcdef0123456789abcdef01234567'
-        echo 'DRAFT_REQUESTED=0 TAG=v9.9-ci7 REQ={}'
+        echo 'DRAFT_REQUESTED=0 TAG=v9.9-ci7 REQ={} CHECKED=0 VC=1 UPDATE_URL=https://forge.invalid/u UPDATE_JSON_PATH=u.json REL=/nonexistent'
         echo 'AUTH_DIR=$(mktemp -d) AUTH_H=$AUTH_DIR/header; : > "$AUTH_H"'
         sed -n '/^log() {/p; /^die() {/p; /^jget() {/,/^print(d)/p; /^api() {/,/^}/p; /^cleanup() {/,/^}/p' "$ci"
         echo 'trap cleanup EXIT'
@@ -862,6 +862,23 @@ t_release_publish_reply_lost() {
     grep -q '^DELETE ' "$F/calls" && { fail "published release deleted"; return 1; }
     expect_has "$(git --git-dir="$RD/forge/owner/repo.git" show main:.forgejo/update.json)" '"versionCode": 10015'
 }
+# F35: a failure after the release is published names the tag and the exact recovery: the
+# update.json to commit once the release passed its checks, else delete the release and its tag
+t_release_failure_after_publish() {
+    release_setup || return $?
+    REJECT_PUSH=1 release_run push || return 1
+    [ "$RR" != 0 ] || { fail "(push) exit 0"; return 1; }
+    o=$(cat "$RD/out.log")
+    expect_has "$o" "failure after publishing v1.11-ci7" || return 1
+    expect_has "$o" "commit .forgejo/update.json on main with the content below" || return 1
+    expect_has "$o" '"versionCode": 10015,' || return 1
+    expect_has "$o" '"zipUrl": "file://'"$RD"'/forge/owner/repo/releases/download/v1.11-ci7/VD-dropbear-v1.11-ci7.zip"' || return 1
+    ANON_OK_AT=9 release_run anon || return 1
+    [ "$RR" != 0 ] || { fail "(anon) exit 0"; return 1; }
+    o=$(cat "$RD/out.log")
+    expect_has "$o" "the published release failed the check above: delete release v1.11-ci7 and tag v1.11-ci7" || return 1
+    expect_not "$o" "content below"
+}
 
 # module-ci.sh build: whatever the build user started is killed after the build, failed or not.
 # setpriv and chown are stubs: the stub records a kill and never runs it (here the test user may
@@ -949,7 +966,7 @@ PY
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_bfu_move_failure_reported t_webui_status t_webui_verbs_exit_zero
 t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
-t_service_disabled t_customize t_uninstall t_sha256_gate t_build_zip_sha256 t_build_fetch_partial t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_build_kills_build_user t_workflow_builds_dispatched_commit"
+t_service_disabled t_customize t_uninstall t_sha256_gate t_build_zip_sha256 t_build_fetch_partial t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_build_kills_build_user t_workflow_builds_dispatched_commit"
 
 for c in $CASES; do run_case "$c"; done
 echo "summary: pass=$PASS fail=$FAIL skip=$SKIP${FAILED:+ failed:$FAILED}"
