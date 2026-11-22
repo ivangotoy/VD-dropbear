@@ -766,6 +766,92 @@ EOF
     return 0
 }
 
+# module-ci.sh release, end to end and offline: the real build() zip, a local bare repo as the
+# forge's git side (file://) and a curl stub as its API, the asset store, the anonymous download
+# and the raw update.json. Nothing is fetched from upstream (the source sha is the base sha).
+# release_run <name>: runs the release step in $W/<name>; env knobs for the stub: PATCH_RC (exit
+# of the publish PATCH after the forge applied it), ANON_OK_AT / POLL_OK_AT (attempt that first
+# succeeds), REJECT_PUSH=1 (the forge refuses pushes once seeded). Sets RR (rc), RD (run dir).
+release_setup() {
+    for _t in bash python3 git zip unzip; do command -v "$_t" >/dev/null 2>&1 || return 77; done
+    build_zip "$W/out" || return 1
+    RTOKEN=tok-example-not-a-secret-1234
+}
+release_run() {
+    RD=$W/$1; F=$RD/forge-state
+    mkdir -p "$RD/forge/owner" "$RD/seed/.forgejo" "$RD/work/.ci-out" "$RD/job" "$RD/bin" "$RD/tmp" "$F"
+    git init -q --bare "$RD/forge/owner/repo.git" && git init -q "$RD/seed" || { fail "fixture repos"; return 1; }
+    cp "$REPO/.forgejo/module-ci.conf" "$RD/seed/.forgejo/"; echo "# changes" > "$RD/seed/CHANGELOG.md"
+    (cd "$RD/seed" && git add -A && git -c user.name=t -c user.email=t@example.invalid commit -qm seed \
+        && git push -q "$RD/forge/owner/repo.git" HEAD:refs/heads/main) || { fail "fixture push"; return 1; }
+    _base=$(git -C "$RD/seed" rev-parse HEAD)
+    [ "${REJECT_PUSH:-0}" = 1 ] && printf '#!/bin/sh\nexit 1\n' > "$RD/forge/owner/repo.git/hooks/pre-receive" \
+        && chmod 755 "$RD/forge/owner/repo.git/hooks/pre-receive"
+    cp "$W/out/module.zip" "$RD/work/.ci-out/module.zip"
+    printf '%s\n\n' "$_base" > "$RD/work/.ci-out/src"; echo "fork main" > "$RD/work/.ci-out/desc"
+    echo true > "$F/draft"
+    cat > "$RD/bin/curl" <<EOF
+#!/bin/sh
+printf '%s\\n' "\$*" >> "$F/argv"
+m=GET o="" att="" w="" mt=0 rt=0; prev=""
+for a in "\$@"; do
+    case "\$prev" in -X) m=\$a ;; -o) o=\$a ;; -w) w=\$a ;; --max-time) mt=\$a ;; --retry) rt=\$a ;; -F) att=\${a#attachment=@} ;; esac
+    prev=\$a; u=\$a
+done
+echo "\$m \$u \$mt \$rt" >> "$F/calls"
+case "\$u" in
+  */releases/tags/*|*/tags/*)
+    if [ -n "\$w" ]; then printf 404; else printf '{"commit": {"sha": "$_base"}}'; fi ;;
+  */releases) printf '{"id": 7}' ;;
+  */releases/7/assets\\?name=*) cp "\$att" "$F/asset.zip"; printf '{"id": 9}' ;;
+  */releases/7/assets/9) printf '{"browser_download_url": "https://forge.invalid/attachments/9"}' ;;
+  https://forge.invalid/attachments/9) cp "$F/asset.zip" "\$o" ;;
+  */releases/7)
+    case "\$m" in
+      PATCH) echo false > "$F/draft"; printf '{}'; exit "\${PATCH_RC:-0}" ;;
+      DELETE) echo deleted > "$F/draft" ;;
+      *) printf '{"id": 7, "draft": %s}' "\$(cat "$F/draft")" ;;
+    esac ;;
+  */releases/download/*)
+    echo x >> "$F/anon"; [ "\$(wc -l < "$F/anon")" -ge "\${ANON_OK_AT:-1}" ] || exit 22
+    cp "$F/asset.zip" "\$o" ;;
+  */raw/branch/main/*)
+    echo x >> "$F/poll"; [ "\$(wc -l < "$F/poll")" -ge "\${POLL_OK_AT:-1}" ] || { printf '{"versionCode": 1}'; exit 0; }
+    git --git-dir="$RD/forge/owner/repo.git" show main:.forgejo/update.json ;;
+  *) echo "stub curl: unexpected \$u" >&2; exit 2 ;;
+esac
+EOF
+    printf '#!/bin/sh\necho "sleep $*" >> "%s/sleeps"\n' "$F" > "$RD/bin/sleep"
+    chmod 755 "$RD/bin/curl" "$RD/bin/sleep"
+    RR=0
+    (cd "$RD/job" && env PATH="$RD/bin:$PATH" TMPDIR="$RD/tmp" SERVER_URL="file://$RD/forge" REPOSITORY=owner/repo \
+        BASE_SHA="$_base" RUN_NUMBER=7 RELEASE_TOKEN="$RTOKEN" bash "$REPO/.forgejo/module-ci.sh" release "$RD/work") \
+        > "$RD/out.log" 2>&1 || RR=$?
+    return 0
+}
+# F34: release mode end to end; its worst-case curl time (every bound x attempts, both
+# polling loops at five attempts, plus one more read for a lost publish reply) stays within
+# half the job's timeout-minutes, leaving the rest for the clone, the build and git transfers.
+# Also: the released zip passes the flash gate, and the token is in no argv and no output.
+t_release_end_to_end() {
+    release_setup || return $?
+    ANON_OK_AT=5 POLL_OK_AT=5 release_run ok || return 1
+    expect_eq "$RR" 0 || { fail "$(tail -n 3 "$RD/out.log" | tr '\n' ' ')"; return 1; }
+    u=$(git --git-dir="$RD/forge/owner/repo.git" show main:.forgejo/update.json)
+    expect_has "$u" '"versionCode": 10015' || return 1
+    expect_has "$u" '"zipUrl": "file://'"$RD"'/forge/owner/repo/releases/download/v1.11-ci7/VD-dropbear-v1.11-ci7.zip"' || return 1
+    mkdir -p "$W/flashed"; (cd "$W/flashed" && unzip -q "$F/asset.zip") || { fail "asset unzip"; return 1; }
+    expect_eq "$(sed -n 's/^versionCode=//p' "$W/flashed/module.prop")" 10015 || return 1
+    out=$(gate_out "$W/flashed"); rc=$?
+    expect_eq "$rc" 0 || { fail "released zip fails the flash gate: $out"; return 1; }
+    grep -qF "$RTOKEN" "$F/argv" "$RD/out.log" && { fail "token in argv or output"; return 1; }
+    tm=$(sed -n 's/^ *timeout-minutes: *\([0-9]*\).*/\1/p' "$REPO/.forgejo/workflows/module-release.yml")
+    worst=$(awk -v s="$(cat "$F/sleeps" 2>/dev/null | awk '{t+=$2} END {print t+0}')" '
+        { b = $3 * ($4 + 1) + ($4 > 0 ? 7 : 0); t += b; if ($1 == "GET" && $4 > 0 && b > g) g = b }
+        END { print t + g + s }' "$F/calls")
+    [ "$worst" -le $((tm * 60 / 2)) ] || { fail "worst-case curl time ${worst}s > half of timeout-minutes $tm"; return 1; }
+}
+
 # module-ci.sh build: whatever the build user started is killed after the build, failed or not.
 # setpriv and chown are stubs: the stub records a kill and never runs it (here the test user may
 # well be the build uid, and `kill -9 -1` would end this session). Needs bash and git (else SKIP).
@@ -852,7 +938,7 @@ PY
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_bfu_move_failure_reported t_webui_status t_webui_verbs_exit_zero
 t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
-t_service_disabled t_customize t_uninstall t_sha256_gate t_build_zip_sha256 t_build_fetch_partial t_release_cleanup_keeps_published t_build_kills_build_user t_workflow_builds_dispatched_commit"
+t_service_disabled t_customize t_uninstall t_sha256_gate t_build_zip_sha256 t_build_fetch_partial t_release_cleanup_keeps_published t_release_end_to_end t_build_kills_build_user t_workflow_builds_dispatched_commit"
 
 for c in $CASES; do run_case "$c"; done
 echo "summary: pass=$PASS fail=$FAIL skip=$SKIP${FAILED:+ failed:$FAILED}"

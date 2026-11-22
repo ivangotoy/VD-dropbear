@@ -130,13 +130,16 @@ trap 'rm -rf "$AUTH_DIR"' EXIT
 AUTH_H="$AUTH_DIR/header"
 (umask 077; printf 'Authorization: token %s\n' "$RELEASE_TOKEN" > "$AUTH_H")
 auth() { printf 'Authorization: token %s' "$RELEASE_TOKEN"; }
-# Only reads are retried: a retried POST/PATCH/DELETE can repeat a change the forge made
+# Only reads are retried: a retried POST/PATCH/DELETE can repeat a change the forge made.
+# Time bounds: the release step must end (and run cleanup) well inside the job's
+# timeout-minutes, so the small JSON reads, which are retried or looped, get 60 s per
+# attempt; writes (a lost reply is worse than a slow one) and zip transfers keep 600 s.
 api() {
-    local m="$1" p="$2" r=""; shift 2
-    case "$m" in GET|HEAD) r="--retry 3" ;; esac
-    curl -sS --connect-timeout 30 --max-time 600 --fail-with-body $r -X "$m" -H "@$AUTH_H" "$@" "$API$p"
+    local m="$1" p="$2" r="" t=600; shift 2
+    case "$m" in GET|HEAD) r="--retry 3" t=60 ;; esac
+    curl -sS --connect-timeout 30 --max-time "$t" --fail-with-body $r -X "$m" -H "@$AUTH_H" "$@" "$API$p"
 }
-http_code() { curl -sS --connect-timeout 30 --max-time 600 -o /dev/null -w '%{http_code}' -H "@$AUTH_H" "$API$1"; }
+http_code() { curl -sS --connect-timeout 30 --max-time 60 -o /dev/null -w '%{http_code}' -H "@$AUTH_H" "$API$1"; }
 git_auth() {
     (n="${GIT_CONFIG_COUNT:-0}"
      export GIT_CONFIG_COUNT=$((n + 1)) "GIT_CONFIG_KEY_$n=http.extraHeader" "GIT_CONFIG_VALUE_$n=$(auth)"
@@ -288,7 +291,7 @@ api PATCH "/releases/$RELEASE_ID" -H 'Content-Type: application/json' -d "$REQ" 
 PUBLISHED=1
 TAG_SHA="$(api GET "/tags/$TAG" | jget commit.sha)"
 [ "$TAG_SHA" = "$SRC_SHA" ] || die "published tag $TAG points at $TAG_SHA, expected $SRC_SHA"
-for i in 1 2 3 4 5; do curl -fsSL --connect-timeout 30 --max-time 600 -o "$REL/anon.zip" "$ZIP_URL" && break; sleep 5; done
+for i in 1 2 3 4 5; do curl -fsSL --connect-timeout 30 --max-time 180 -o "$REL/anon.zip" "$ZIP_URL" && break; sleep 5; done
 [ "$(sha "$REL/anon.zip")" = "$ZIP_SHA" ] || die "anonymous download of $ZIP_URL differs"
 log "published $TAG"
 
@@ -316,7 +319,7 @@ git commit -q -m "update.json: $VERSION (versionCode $VC)"
 git_auth push -q origin HEAD:refs/heads/main || die "push of update.json failed"
 got=""
 for i in 1 2 3 4 5; do
-    got="$(curl -fsS --connect-timeout 30 --max-time 600 "$UPDATE_URL" | jget versionCode || true)"
+    got="$(curl -fsS --connect-timeout 30 --max-time 60 "$UPDATE_URL" | jget versionCode || true)"
     [ "$got" = "$VC" ] && break; sleep 5
 done
 [ "$got" = "$VC" ] || die "$UPDATE_URL answers versionCode '$got', expected $VC"
