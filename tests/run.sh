@@ -338,6 +338,41 @@ t_bfu_toggle_moves_secrets() {
     expect_eq "$(cat "$CE/authorized_keys")" "ssh-rsa AAAAexample2 two@example" || return 1
     [ -f "$DE/authorized_keys" ] || fail "dormant DE key touched"
 }
+# F37: a START_IN_BFU switch whose secrets cannot be moved answers an error and changes
+# nothing: the config keeps the old mode and every secret stays in the old store, none
+# half-moved (CE locked, target store not writable, one file not copyable)
+t_bfu_move_failure_reported() {
+    h='pbkdf2-sha256$600000$00112233$0011223344556677889900112233445566778899001122334455667788990011'
+    expect_eq "$(webui_in "$(printf 'START_IN_BFU=0\nPORT=2299')" set-config)" ok || return 1
+    expect_eq "$(webui_in "ssh-ed25519 AAAAexample1 one@example" add-key)" ok || return 1
+    expect_eq "$(webui_in "$h" set-pw root)" ok || return 1
+    printf 'FAKEKEY ed25519\n' > "$CE/hostkey_ed25519"; chmod 600 "$CE/hostkey_ed25519"
+    c=$(cat "$DATA/config")
+    unchanged() {
+        expect_eq "$(cat "$DATA/config")" "$c" || return 1
+        for f in authorized_keys passwd hostkey_ed25519; do [ -f "$CE/$f" ] || { fail "$f gone from CE"; return 1; }; done
+        [ -z "$(ls -A "$DE" 2>/dev/null)" ] || { fail "DE holds: $(ls -A "$DE")"; return 1; }
+        [ -z "$(ls "$DATA" | grep config.new)" ] || fail "config temp left"
+    }
+    : > "$DE"
+    out=$(webui_in "$(printf 'START_IN_BFU=1\nPORT=2299')" set-config); rc=$?
+    expect_eq "$out" "err: secrets not moved" || return 1
+    [ "$rc" != 0 ] || { fail "exit 0 when the target store is not writable"; return 1; }
+    rm -f "$DE"; unchanged || return 1
+    printf 'ro.product.cpu.abi=x86_64\nsys.user.0.ce_available=false\n' > "$W/props"
+    out=$(webui_in "$(printf 'START_IN_BFU=1\nPORT=2299')" set-config); rc=$?
+    expect_eq "$out" "err: secrets not moved" || return 1
+    [ "$rc" != 0 ] || { fail "exit 0 with CE locked"; return 1; }
+    unchanged || return 1
+    printf 'ro.product.cpu.abi=x86_64\nsys.user.0.ce_available=true\n' > "$W/props"
+    [ "$(id -u)" = 0 ] && return 0
+    chmod 000 "$CE/passwd"
+    out=$(webui_in "$(printf 'START_IN_BFU=1\nPORT=2299')" set-config); rc=$?
+    chmod 600 "$CE/passwd"
+    expect_eq "$out" "err: secrets not moved" || return 1
+    [ "$rc" != 0 ] || { fail "exit 0 when passwd cannot be copied"; return 1; }
+    rmdir "$DE" 2>/dev/null; unchanged
+}
 t_webui_status() {
     cfg PORT=2299
     s=$(webui status)
@@ -768,7 +803,7 @@ PY
 }
 
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
-t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_webui_status t_webui_verbs_exit_zero
+t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_bfu_move_failure_reported t_webui_status t_webui_verbs_exit_zero
 t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
 t_service_disabled t_customize t_uninstall t_build_fetch_partial t_release_cleanup_keeps_published t_build_kills_build_user t_workflow_builds_dispatched_commit"
 

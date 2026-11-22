@@ -144,16 +144,21 @@ case "$1" in
     } 2>/dev/null > "$_new" || { rm -f "$_new"; die "write failed"; }
     # must contain at least one real key or we refuse to clobber the config
     grep -q '^[A-Z]' "$_new" || { rm -f "$_new"; die "no valid keys"; }
-    mv "$_new" "$VDDB_CONFIG" 2>/dev/null || { rm -f "$_new"; die "install failed"; }
-    chmod 600 "$VDDB_CONFIG" 2>/dev/null
-    # START_IN_BFU switched: the secrets follow it to the other store
+    # START_IN_BFU switched: the secrets follow it to the other store. They are copied
+    # before the config is installed and renamed after it, so a failure up to the
+    # install leaves the config and both stores as they were.
     _was_bfu=0; [ "$START_IN_BFU" = "1" ] && _was_bfu=1
-    vddb_load_config
-    _now_bfu=0; [ "$START_IN_BFU" = "1" ] && _now_bfu=1
+    _now_bfu="$(VDDB_CONFIG=$_new; vddb_load_config; [ "$START_IN_BFU" = "1" ] && echo 1 || echo 0)"
+    _from="" _to=""
     if [ "$_was_bfu" != "$_now_bfu" ]; then
-      if [ "$_now_bfu" = 1 ]; then vddb_move_secrets "$VDDB_CE_SECRET" "$VDDB_DE_SECRET"
-      else vddb_move_secrets "$VDDB_DE_SECRET" "$VDDB_CE_SECRET"; fi
+      if [ "$_now_bfu" = 1 ]; then _from=$VDDB_CE_SECRET _to=$VDDB_DE_SECRET
+      else _from=$VDDB_DE_SECRET _to=$VDDB_CE_SECRET; fi
+      vddb_stage_secrets "$_from" "$_to" || { rm -f "$_new"; die "secrets not moved"; }
     fi
+    mv "$_new" "$VDDB_CONFIG" 2>/dev/null || {
+      rm -f "$_new"; [ -n "$_to" ] && rm -f "$_to"/*.tmp.$$ 2>/dev/null; die "install failed"; }
+    chmod 600 "$VDDB_CONFIG" 2>/dev/null
+    [ -n "$_to" ] && vddb_commit_secrets "$_from" "$_to"
     echo "ok"
     ;;
 # ----------------------------------------------------- daemon lifecycle ----

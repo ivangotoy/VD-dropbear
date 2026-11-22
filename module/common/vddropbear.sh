@@ -132,10 +132,13 @@ vddb_secret_dir() {
 }
 
 # Move the secrets (host keys, authorized_keys, passwd) from store $1 to store $2
-# when START_IN_BFU is switched from the WebUI. Needs CE storage unlocked. A file
-# that already exists in $2 is kept and its counterpart stays in $1; each moved
-# file is copied to a 0600 temp in $2, renamed there, then removed from $1.
-vddb_move_secrets() {
+# when START_IN_BFU is switched from the WebUI, in two steps so that a failure
+# changes nothing: vddb_stage_secrets copies every file that moves to a 0600 temp
+# in $2 (on any failure the temps are removed and it returns 1), and
+# vddb_commit_secrets renames the temps to their names and removes the sources.
+# A file that already exists in $2 is kept and its counterpart stays in $1.
+# Needs CE storage unlocked.
+vddb_stage_secrets() {
     vddb_ce_ready || { vddb_log "secrets not moved: CE storage is locked"; return 1; }
     [ -d "$1" ] || return 0
     mkdir -p "$2" 2>/dev/null; chmod 700 "$2" 2>/dev/null
@@ -143,11 +146,20 @@ vddb_move_secrets() {
         [ -f "$_s" ] || continue
         _t="$2/${_s##*/}"
         if [ -e "$_t" ]; then vddb_log "secret store: kept $_t, left $_s"; continue; fi
-        if cp "$_s" "$_t.tmp.$$" 2>/dev/null && chmod 600 "$_t.tmp.$$" 2>/dev/null \
-            && mv -f "$_t.tmp.$$" "$_t" 2>/dev/null; then
+        cp "$_s" "$_t.tmp.$$" 2>/dev/null && chmod 600 "$_t.tmp.$$" 2>/dev/null && continue
+        vddb_log "secret store: could not copy $_s to $2, nothing moved"
+        rm -f "$2"/*.tmp.$$ 2>/dev/null
+        return 1
+    done
+}
+vddb_commit_secrets() {
+    for _p in "$2"/*.tmp.$$; do
+        [ -f "$_p" ] || continue
+        _t="${_p%.tmp.$$}"; _s="$1/${_t##*/}"
+        if mv -f "$_p" "$_t" 2>/dev/null; then
             rm -f "$_s"; vddb_log "secret store: moved $_s to $_t"
         else
-            rm -f "$_t.tmp.$$"; vddb_log "secret store: could not move $_s"
+            rm -f "$_p"; vddb_log "secret store: could not move $_s"
         fi
     done
 }
