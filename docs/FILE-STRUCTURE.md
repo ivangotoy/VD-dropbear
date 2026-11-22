@@ -64,6 +64,7 @@ UPSTREAM_VERSION            the pinned upstream Dropbear tag
   state/daemon.log          the daemon log
   state/daemon.log.1        the previous log (moved there at start once the log passes 1 MiB)
   state/daemon.pid          pid of the listening daemon (sessions are its children)
+  state/vddropbear.pid      pid file Dropbear itself writes (its -P option)
   secret/                   secrets, ONLY when START_IN_BFU=1 (device-encrypted)
 
 /data/misc_ce/0/vddropbear/
