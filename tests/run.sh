@@ -646,6 +646,53 @@ t_uninstall() {
 }
 
 # --- cases: build tooling (logic taken from the script text, nothing fetched) ---
+# the flash-time integrity gate customize.sh sources (.vd/sha256-gate.sh), with companions made by
+# upstream's .github/scripts/gen-sha256.sh, under the shell running this suite: a good tree
+# passes, a changed file and a companion without its file abort the flash
+gate_out() { (MODPATH=$1; . "$1/.vd/sha256-gate.sh") 2>&1; }
+t_sha256_gate() {
+    sh "$REPO/.github/scripts/gen-sha256.sh" "$MOD" > /dev/null || { fail "gen-sha256 failed"; return 1; }
+    out=$(gate_out "$MOD"); rc=$?
+    expect_eq "$rc" 0 || { fail "$out"; return 1; }
+    expect_has "$out" "integrity verified" || return 1
+    cp "$MOD/common/vddropbear.sh" "$W/lib.sh"
+    echo "# changed" >> "$MOD/common/vddropbear.sh"
+    out=$(gate_out "$MOD"); rc=$?
+    [ "$rc" != 0 ] || { fail "changed file passed the gate"; return 1; }
+    expect_has "$out" "sha256 mismatch: common/vddropbear.sh.sha256" || return 1
+    cp "$W/lib.sh" "$MOD/common/vddropbear.sh"; rm "$MOD/action.sh"
+    out=$(gate_out "$MOD"); rc=$?
+    [ "$rc" != 0 ] || { fail "companion without its file passed the gate"; return 1; }
+    expect_has "$out" "sha256 mismatch: action.sh.sha256"
+}
+
+# build_zip <outdir>: the real build() from .forgejo/module-ci.conf, run by bash as module-ci.sh
+# build-user runs it, on a tar copy of the files it reads; the zip lands in <outdir>/module.zip
+build_zip() {
+    mkdir -p "$W/src" "$1"
+    (cd "$REPO" && tar -cf - module LICENSE NOTICE THIRD-PARTY-NOTICES.md .forgejo/module-ci.conf \
+        .github/scripts/gen-sha256.sh) | (cd "$W/src" && tar -xf -)
+    (cd "$W/src" && OUT=$1 bash -c '. .forgejo/module-ci.conf; build') > "$W/build.log" 2>&1 \
+        || { fail "build(): $(tail -n 2 "$W/build.log" | tr '\n' ' ')"; return 1; }
+}
+# F36: the fork zip carries a .sha256 companion for every file and none without its file, so
+# the flash-time gate checks the real payload. Needs bash, python3, zip, unzip (else SKIP).
+t_build_zip_sha256() {
+    for _t in bash python3 zip unzip; do command -v "$_t" >/dev/null 2>&1 || return 77; done
+    build_zip "$W/out" || return 1
+    mkdir -p "$W/flash"; (cd "$W/flash" && unzip -q "$W/out/module.zip") || { fail "unzip failed"; return 1; }
+    (cd "$W/flash" && find . -type f | sed 's|^\./||') > "$W/files"
+    grep -v '\.sha256$' "$W/files" | sed 's/$/.sha256/' | sort > "$W/want"
+    grep '\.sha256$' "$W/files" | sort > "$W/have"
+    [ -s "$W/want" ] || { fail "empty zip"; return 1; }
+    expect_eq "$(cat "$W/have")" "$(cat "$W/want")" || return 1
+    out=$(gate_out "$W/flash"); rc=$?
+    expect_eq "$rc" 0 || { fail "$out"; return 1; }
+    expect_has "$out" "integrity verified" || return 1
+    echo "# changed" >> "$W/flash/common/vddropbear.sh"
+    out=$(gate_out "$W/flash"); rc=$?
+    [ "$rc" != 0 ] || fail "changed file passed the gate"
+}
 # F12: scripts/build-bundles.sh fetch() must not reuse a partial download as a cached tarball
 t_build_fetch_partial() {
     sed -n '/^fetch() {/,/^}/p' "$REPO/scripts/build-bundles.sh" > "$W/fetch.sh"
@@ -805,7 +852,7 @@ PY
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_bfu_move_failure_reported t_webui_status t_webui_verbs_exit_zero
 t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
-t_service_disabled t_customize t_uninstall t_build_fetch_partial t_release_cleanup_keeps_published t_build_kills_build_user t_workflow_builds_dispatched_commit"
+t_service_disabled t_customize t_uninstall t_sha256_gate t_build_zip_sha256 t_build_fetch_partial t_release_cleanup_keeps_published t_build_kills_build_user t_workflow_builds_dispatched_commit"
 
 for c in $CASES; do run_case "$c"; done
 echo "summary: pass=$PASS fail=$FAIL skip=$SKIP${FAILED:+ failed:$FAILED}"
