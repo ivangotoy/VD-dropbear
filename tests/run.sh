@@ -778,6 +778,12 @@ release_setup() {
     for _t in bash python3 git zip unzip; do command -v "$_t" >/dev/null 2>&1 || return 77; done
     build_zip "$W/out" || return 1
     RTOKEN=tok-example-not-a-secret-1234
+    # what the release computes from module.prop and the conf (run number 7), as module-ci.sh does
+    _c=$REPO/.forgejo/module-ci.conf
+    RVC=$(( $(sed -n 's/^versionCode=//p' "$REPO/module/module.prop") + $(sed -n 's/^VERSION_CODE_OFFSET=//p' "$_c") ))
+    RTAG=$(sed -n 's/^version=//p' "$REPO/module/module.prop" | sed -E 's/-(fork|ci)[0-9]+$//')-ci7
+    case "$RTAG" in v*) ;; *) RTAG=v$RTAG ;; esac
+    RZIP=$(sed -n 's/^ZIP_PREFIX=//p' "$_c")-$RTAG.zip
 }
 release_run() {
     RD=$W/$1; F=$RD/forge-state
@@ -840,10 +846,10 @@ t_release_end_to_end() {
     ANON_OK_AT=5 POLL_OK_AT=5 release_run ok || return 1
     expect_eq "$RR" 0 || { fail "$(tail -n 3 "$RD/out.log" | tr '\n' ' ')"; return 1; }
     u=$(git --git-dir="$RD/forge/owner/repo.git" show main:.forgejo/update.json)
-    expect_has "$u" '"versionCode": 10015' || return 1
-    expect_has "$u" '"zipUrl": "file://'"$RD"'/forge/owner/repo/releases/download/v1.11-ci7/VD-dropbear-v1.11-ci7.zip"' || return 1
+    expect_has "$u" "\"versionCode\": $RVC" || return 1
+    expect_has "$u" "\"zipUrl\": \"file://$RD/forge/owner/repo/releases/download/$RTAG/$RZIP\"" || return 1
     mkdir -p "$W/flashed"; (cd "$W/flashed" && unzip -q "$F/asset.zip") || { fail "asset unzip"; return 1; }
-    expect_eq "$(sed -n 's/^versionCode=//p' "$W/flashed/module.prop")" 10015 || return 1
+    expect_eq "$(sed -n 's/^versionCode=//p' "$W/flashed/module.prop")" "$RVC" || return 1
     out=$(gate_out "$W/flashed"); rc=$?
     expect_eq "$rc" 0 || { fail "released zip fails the flash gate: $out"; return 1; }
     grep -qF "$RTOKEN" "$F/argv" "$RD/out.log" && { fail "token in argv or output"; return 1; }
@@ -860,7 +866,7 @@ t_release_publish_reply_lost() {
     PATCH_RC=28 release_run lost || return 1
     expect_eq "$RR" 0 || { fail "$(tail -n 3 "$RD/out.log" | tr '\n' ' ')"; return 1; }
     grep -q '^DELETE ' "$F/calls" && { fail "published release deleted"; return 1; }
-    expect_has "$(git --git-dir="$RD/forge/owner/repo.git" show main:.forgejo/update.json)" '"versionCode": 10015'
+    expect_has "$(git --git-dir="$RD/forge/owner/repo.git" show main:.forgejo/update.json)" "\"versionCode\": $RVC"
 }
 # F35: a failure after the release is published names the tag and the exact recovery: the
 # update.json to commit once the release passed its checks, else delete the release and its tag
@@ -869,14 +875,14 @@ t_release_failure_after_publish() {
     REJECT_PUSH=1 release_run push || return 1
     [ "$RR" != 0 ] || { fail "(push) exit 0"; return 1; }
     o=$(cat "$RD/out.log")
-    expect_has "$o" "failure after publishing v1.11-ci7" || return 1
+    expect_has "$o" "failure after publishing $RTAG" || return 1
     expect_has "$o" "commit .forgejo/update.json on main with the content below" || return 1
-    expect_has "$o" '"versionCode": 10015,' || return 1
-    expect_has "$o" '"zipUrl": "file://'"$RD"'/forge/owner/repo/releases/download/v1.11-ci7/VD-dropbear-v1.11-ci7.zip"' || return 1
+    expect_has "$o" "\"versionCode\": $RVC," || return 1
+    expect_has "$o" "\"zipUrl\": \"file://$RD/forge/owner/repo/releases/download/$RTAG/$RZIP\"" || return 1
     ANON_OK_AT=9 release_run anon || return 1
     [ "$RR" != 0 ] || { fail "(anon) exit 0"; return 1; }
     o=$(cat "$RD/out.log")
-    expect_has "$o" "the published release failed the check above: delete release v1.11-ci7 and tag v1.11-ci7" || return 1
+    expect_has "$o" "the published release failed the check above: delete release $RTAG and tag $RTAG" || return 1
     expect_not "$o" "content below"
 }
 
