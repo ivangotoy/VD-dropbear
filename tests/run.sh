@@ -682,6 +682,10 @@ t_build_zip_sha256() {
     build_zip "$W/out" || return 1
     mkdir -p "$W/flash"; (cd "$W/flash" && unzip -q "$W/out/module.zip") || { fail "unzip failed"; return 1; }
     (cd "$W/flash" && find . -type f | sed 's|^\./||') > "$W/files"
+    # the VDLU updater stays out of the fork zip (module-ci.conf removes it before hashing)
+    if grep -E '^(vdlu/|webroot/vdlu\.)' "$W/files" > "$W/vdlu"; then
+        fail "zip holds VDLU files: $(tr '\n' ' ' < "$W/vdlu")"; return 1
+    fi
     grep -v '\.sha256$' "$W/files" | sed 's/$/.sha256/' | sort > "$W/want"
     grep '\.sha256$' "$W/files" | sort > "$W/have"
     [ -s "$W/want" ] || { fail "empty zip"; return 1; }
