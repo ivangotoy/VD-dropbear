@@ -150,7 +150,7 @@ run_case() {
 t_args_default() {
     mkdir -p "$DATA"; cp "$MOD/common/config.default" "$DATA/config"
     a=$(MODDIR=$MOD; . "$MOD/common/vddropbear.sh"; vddb_load_config; vddb_build_args | tr '\n' ' ')
-    expect_eq "$a" "-r $CE/hostkey_ed25519 -p 127.0.0.1:2222 -p [::1]:2222 -F -P /dev/null -e -s -T 3 -j -k "
+    expect_eq "$a" "-r $CE/hostkey_ed25519 -p 127.0.0.1:2222 -p [::1]:2222 -F -P $DATA/state/vddropbear.pid -e -s -T 3 -j -k "
 }
 t_args_binds() {
     a=$(args_for LISTEN_ALL=1)
@@ -162,11 +162,11 @@ t_args_binds() {
     a=$(args_for LISTEN_LOOPBACK=0 LISTEN_ALL=0)
     expect_has "$a" "-p 127.0.0.1:2222 -F" || return 1
     a=$(args_for PASSWORD_AUTH=1 ALLOW_LOCAL_FORWARD=1 ALLOW_REMOTE_FORWARD=1 GATEWAY_PORTS=1 IDLE_TIMEOUT=60 KEEPALIVE=30 RECEIVE_WINDOW=65536 PASS_ENV=0)
-    expect_eq "$a" "-r $CE/hostkey_ed25519 -p 127.0.0.1:2222 -p [::1]:2222 -F -P /dev/null -T 3 -a -I 60 -K 30 -W 65536 "
+    expect_eq "$a" "-r $CE/hostkey_ed25519 -p 127.0.0.1:2222 -p [::1]:2222 -F -P $DATA/state/vddropbear.pid -T 3 -a -I 60 -K 30 -W 65536 "
 }
 t_config_normalise() {
     a=$(args_for PORT=abc HOSTKEY_TYPE=dsa "RECEIVE_WINDOW='1;x'" MAX_AUTH_TRIES=x)
-    expect_eq "$a" "-r $CE/hostkey_ed25519 -p 127.0.0.1:2222 -p [::1]:2222 -F -P /dev/null -e -s -j -k "
+    expect_eq "$a" "-r $CE/hostkey_ed25519 -p 127.0.0.1:2222 -p [::1]:2222 -F -P $DATA/state/vddropbear.pid -e -s -j -k "
 }
 t_config_bfu_store() {
     a=$(args_for START_IN_BFU=1 HOSTKEY_TYPE=ecdsa)
@@ -266,7 +266,7 @@ t_webui_unterminated_last_line() {
 t_webui_args_quoted() {
     node -e "" >/dev/null 2>&1 || return 77
     printf 'const SH = process.argv[2]; let CMD = "";\nfunction exec(c) { CMD = c; return Promise.resolve({ errno: 0, stdout: "", stderr: "" }); }\n' > "$W/run.js"
-    sed -n '/^function shq(/p; /^async function api(/,/^}/p; /^async function apiIn(/,/^}/p' "$MOD/webroot/index.html" >> "$W/run.js"
+    sed -n '/^const shq = /p; /^function apiErr(/,/r\.stdout; }$/p; /^async function api(/,/^}/p; /^async function apiIn(/,/^}/p' "$MOD/webroot/index.html" >> "$W/run.js"
     printf 'const [verb, arg, inp] = process.argv.slice(3);\n(inp ? apiIn(verb, inp, arg) : api(verb, arg)).then(() => process.stdout.write(CMD));\n' >> "$W/run.js"
     printf '#!/bin/sh\ncat > "%s/stdin"; for a in "$@"; do printf "[%%s]" "$a"; done > "%s/args"\n' "$W" "$W" > "$W/backend"
     evil="x\$(touch $W/pwned)';touch $W/pwned2;'y"
