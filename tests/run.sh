@@ -352,6 +352,20 @@ t_webui_status() {
     [ "$rc" != 0 ] || fail "exit 0 on unknown verb"
 }
 
+# since v1.10 the page (apiErr) turns a non-zero exit into "err: command failed" and drops the
+# reply: every data verb exits 0 on success, also when the last file line is a comment or blank
+t_webui_verbs_exit_zero() {
+    h='pbkdf2-sha256$600000$00112233$0011223344556677889900112233445566778899001122334455667788990011'
+    rc_of() { "$@" >/dev/null 2>&1; echo $?; }
+    expect_eq "$(rc_of webui_in "$(printf 'PORT=2299\nLISTEN_ALL=0')" set-config)" 0 || return 1
+    expect_eq "$(rc_of webui_in "ssh-ed25519 AAAAexample1 one@example" add-key)" 0 || return 1
+    expect_eq "$(rc_of webui_in "$h" set-pw root)" 0 || return 1
+    printf '# a comment\n\n' >> "$CE/authorized_keys"; printf '# a comment\n' >> "$CE/passwd"
+    for v in status get-config list-keys list-pw "del-key 1" "del-pw root"; do
+        expect_eq "$(rc_of webui $v)" 0 || { fail "$v"; return 1; }
+    done
+}
+
 # --- cases: lifecycle ----------------------------------------------------------
 t_action_start() {
     cfg PORT=2299 "EXTRA_ENV='FOO=bar;BAZ=q x'" HIDE_IDENT=1
@@ -754,7 +768,7 @@ PY
 }
 
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
-t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_webui_status
+t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_webui_status t_webui_verbs_exit_zero
 t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
 t_service_disabled t_customize t_uninstall t_build_fetch_partial t_release_cleanup_keeps_published t_build_kills_build_user t_workflow_builds_dispatched_commit"
 
