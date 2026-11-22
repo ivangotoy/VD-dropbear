@@ -738,10 +738,12 @@ case "\$m" in
 esac
 EOF
     chmod 755 "$STUB/curl"
-    # (a) PATCH fails after the forge applied it (release now published): no DELETE, job fails
+    # (a) PATCH fails after the forge applied it (release now published): the run reads the
+    # state back and goes on as published, no DELETE
     : > "$W/calls"; PATCH_RC=28 DRAFT=false TMPDIR=$W bash "$W/rel.sh" publish 2>"$W/err"; rc=$?
-    [ "$rc" != 0 ] || { fail "(a) exit 0 after a failed PATCH"; return 1; }
+    expect_eq "$rc" 0 || { fail "(a) $(cat "$W/err")"; return 1; }
     grep -q '^PATCH ' "$W/calls" || { fail "(a) no PATCH sent"; return 1; }
+    grep -q '^GET .*/releases/7$' "$W/calls" || { fail "(a) state not read back"; return 1; }
     grep -q '^DELETE ' "$W/calls" && { fail "(a) published release deleted"; return 1; }
     # (b) failure before publish, release still a draft: DELETE issued
     : > "$W/calls"; DRAFT=true TMPDIR=$W bash "$W/rel.sh" upload 2>"$W/err"; rc=$?
@@ -851,6 +853,15 @@ t_release_end_to_end() {
         END { print t + g + s }' "$F/calls")
     [ "$worst" -le $((tm * 60 / 2)) ] || { fail "worst-case curl time ${worst}s > half of timeout-minutes $tm"; return 1; }
 }
+# C2: the forge publishes the release but the reply to the publish PATCH is lost: the run reads
+# the release back, sees it published, and still commits update.json
+t_release_publish_reply_lost() {
+    release_setup || return $?
+    PATCH_RC=28 release_run lost || return 1
+    expect_eq "$RR" 0 || { fail "$(tail -n 3 "$RD/out.log" | tr '\n' ' ')"; return 1; }
+    grep -q '^DELETE ' "$F/calls" && { fail "published release deleted"; return 1; }
+    expect_has "$(git --git-dir="$RD/forge/owner/repo.git" show main:.forgejo/update.json)" '"versionCode": 10015'
+}
 
 # module-ci.sh build: whatever the build user started is killed after the build, failed or not.
 # setpriv and chown are stubs: the stub records a kill and never runs it (here the test user may
@@ -938,7 +949,7 @@ PY
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_bfu_move_failure_reported t_webui_status t_webui_verbs_exit_zero
 t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
-t_service_disabled t_customize t_uninstall t_sha256_gate t_build_zip_sha256 t_build_fetch_partial t_release_cleanup_keeps_published t_release_end_to_end t_build_kills_build_user t_workflow_builds_dispatched_commit"
+t_service_disabled t_customize t_uninstall t_sha256_gate t_build_zip_sha256 t_build_fetch_partial t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_build_kills_build_user t_workflow_builds_dispatched_commit"
 
 for c in $CASES; do run_case "$c"; done
 echo "summary: pass=$PASS fail=$FAIL skip=$SKIP${FAILED:+ failed:$FAILED}"

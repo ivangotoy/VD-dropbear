@@ -287,7 +287,11 @@ if [ "$SRC_SHA" != "$BASE_SHA" ]; then
     git_auth push -q origin "$SRC_SHA:refs/heads/main" || die "push of the merge failed (main moved?)"
 fi
 REQ="$(python3 -I -c 'import json,sys;print(json.dumps({"draft":False,"target_commitish":sys.argv[1]}))' "$SRC_SHA")"
-api PATCH "/releases/$RELEASE_ID" -H 'Content-Type: application/json' -d "$REQ" >/dev/null
+if ! api PATCH "/releases/$RELEASE_ID" -H 'Content-Type: application/json' -d "$REQ" >/dev/null; then
+    # the forge may have applied the publish and lost the reply: go on once it reports the release published
+    [ "$(api GET "/releases/$RELEASE_ID" | jget draft || true)" = False ] || die "publish of release $RELEASE_ID failed"
+    log "the publish reply was lost, but release $RELEASE_ID is published: continuing"
+fi
 PUBLISHED=1
 TAG_SHA="$(api GET "/tags/$TAG" | jget commit.sha)"
 [ "$TAG_SHA" = "$SRC_SHA" ] || die "published tag $TAG points at $TAG_SHA, expected $SRC_SHA"
