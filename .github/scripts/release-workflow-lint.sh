@@ -1,6 +1,29 @@
 #!/bin/sh
-# SPDX-License-Identifier: Apache-2.0
-# Copyright (C) 2026  VD171
+# ======================================================================
+#  VD-ModuleKit  ::  release-workflow-lint.sh
+#  Preventive release-workflow linter: encodes the fleet release model as
+#  static CI checks so a workflow that breaks it fails before it publishes.
+#
+#  Copyright (C) 2026  VD171
+#  SPDX-License-Identifier: Apache-2.0
+#
+#  Licensed under the Apache License, Version 2.0; you may obtain a copy at
+#  http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Site           : https://vd171.ru
+#  Site           : https://vd.priv8.ru
+#  Source         : https://github.com/VD171/VD-dropbear
+#  GitHub         : @VD171 https://github.com/VD171
+#  XDA-Developers : @VD171 https://xdaforums.com/m/vd171.4699873/
+#  XDA thread     : https://xdaforums.com/t/VD-Dropbear.4808524/
+#  Telegram       : @VD_Priv8 https://t.me/VD_Priv8
+#  Channel        : @Priv8_VD https://t.me/Priv8_VD
+#  Discord        : @VD.Priv8 https://discord.com/users/1296831918989639721
+#  E-mail         : vd.priv8@pm.me
+#  Vendored from VD-ModuleKit; the host module fills the contact chain and keeps
+#  its own license and product banner.
+# ======================================================================
+#
 # Release-workflow lint (preventive). Encodes the fleet release model as static checks so a
 # workflow that breaks it fails CI before it ever publishes. The model (STANDARDS 7.1):
 #   * main holds curated snapshots; releases are published by CI as github-actions[bot];
@@ -18,11 +41,19 @@
 #   B       -- publish before bump-commit: a version-bump commit+push that precedes the publish
 #              step in the same job (404-on-main risk).
 #   seed    -- VDLU baseline seeding: a module that vendors the VDLU engine (has a module/vdlu/
-#              dir) must SEED a content-addressed baseline (vdlu/baseline.json) into each release
-#              zip, so the first on-device VDLU auto-update is INCREMENTAL instead of a full
-#              from:0 re-download. If such a module publishes a release but no publish workflow
-#              references baseline seeding (baseline.json / seed_baseline), FLAG. App-only modules
-#              (no module/vdlu/) skip this check silently.
+#              dir) must SEED a content-addressed baseline (vdlu/baseline.json) so the first
+#              on-device VDLU auto-update is INCREMENTAL instead of a full from:0 re-download.
+#              There are TWO valid seeding paths, and EITHER one satisfies the check:
+#                (a) CI keyless seed -- a seed_baseline() step in the publish workflow runs
+#                    vdlu-pack (keyless) to write vdlu/baseline.json into the staged zip
+#                    (VD-Installer / VD-Backup / dropbear). Detected: a publish workflow
+#                    references baseline.json / seed_baseline.
+#                (b) committed SIGNED baseline -- the module COMMITS module/vdlu/baseline.json
+#                    to the repo, regenerated + SIGNED locally (signing key kept OUT of CI) via
+#                    its release runbook (COPG-VD). This is the STRONGER, deliberate choice (a
+#                    signed integrity-root baseline; the signing key never touches CI).
+#              FLAG only when module/vdlu/ exists AND a release is published AND NEITHER (a) nor
+#              (b) holds. App-only modules (no module/vdlu/) skip this check silently.
 # Conservative by design (these run across the whole fleet): only the clear cases flag.
 # Usage: release-workflow-lint.sh [repo_root]
 set -eu
@@ -87,7 +118,10 @@ for wf in "$wfdir"/*.y*ml; do
       if (buf ~ /module\.prop/) isBump = 1            # version source / bump signals
       if (buf ~ /version\.sh/)  isBump = 1
       if (buf ~ /versionCode/)  isBump = 1
-      if (buf ~ /[Bb]ump/)      isBump = 1
+      # NOT the bare word "bump": it matches a comment or commit message that merely DESCRIBES the
+      # bump process (e.g. a lock-seed step whose comment says "a change triggers a patch bump") with
+      # no actual version write - a false positive. A real bump runs version.sh / writes module.prop
+      # or versionCode, already caught above.
       if (isCP && isBump) bumpseen = 1                # a bump commit+push happened in this job
       if (isPub) {
         if (bumpseen && !bflag[job]) {
