@@ -72,7 +72,7 @@ Android's C library (bionic) does not provide `crypt()`, `crypt_r()`, or a shado
 exposes no `<crypt.h>`. So the stock Dropbear password path, which calls `crypt(password, salt)` and
 compares against `/etc/shadow`, simply cannot be built or run on Android. There is also no
 `libcrypt` to link against, and pulling in OpenSSL's `libcrypto` just for a password hash would be a
-large, awkward dependency for a static binary.
+large, awkward dependency for a binary that bundles its own crypto.
 
 **Our answer:** don't use `crypt()` at all. Password auth verifies the presented password with
 **PBKDF2-HMAC-SHA256** against a hash file (`DROPBEAR_PASSWD_FILE`), a public, standard, salted,
