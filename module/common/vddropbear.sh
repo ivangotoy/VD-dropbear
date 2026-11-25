@@ -155,26 +155,31 @@ vddb_stage_secrets() {
         return 1
     done
 }
+# VDDB_MOVED lists the renamed file names as /name1/name2/ ("/" cannot occur in a name).
 vddb_commit_secrets() {
-    VDDB_MOVED=""
+    VDDB_MOVED=/
     for _p in "$2"/*.tmp.$$; do
         [ -f "$_p" ] || continue
         _t="${_p%.tmp.$$}"
-        if mv -f "$_p" "$_t" 2>/dev/null; then VDDB_MOVED="$VDDB_MOVED ${_t##*/}"; continue; fi
+        if mv -f "$_p" "$_t" 2>/dev/null; then VDDB_MOVED="$VDDB_MOVED${_t##*/}/"; continue; fi
         vddb_log "secret store: could not rename $_p, nothing moved"
         vddb_unmove_secrets "$2"
         rm -f "$2"/*.tmp.$$ 2>/dev/null
         return 1
     done
 }
+vddb_moved() { case "$VDDB_MOVED" in */"$1"/*) return 0 ;; esac; return 1; }
 vddb_unmove_secrets() {
-    for _m in $VDDB_MOVED; do rm -f "$1/$_m" 2>/dev/null; done
-    VDDB_MOVED=""
+    for _f in "$1"/hostkey_* "$1/authorized_keys" "$1/passwd"; do
+        [ -f "$_f" ] && vddb_moved "${_f##*/}" && rm -f "$_f" 2>/dev/null
+    done
+    VDDB_MOVED=/
 }
 vddb_drop_sources() {
-    for _m in $VDDB_MOVED; do
-        if rm -f "$1/$_m" 2>/dev/null; then vddb_log "secret store: moved $1/$_m to $2/$_m"
-        else vddb_log "secret store: copied $1/$_m to $2/$_m, could not remove $1/$_m"; fi
+    for _f in "$1"/hostkey_* "$1/authorized_keys" "$1/passwd"; do
+        [ -f "$_f" ] && vddb_moved "${_f##*/}" || continue
+        if rm -f "$_f" 2>/dev/null; then vddb_log "secret store: moved $_f to $2/${_f##*/}"
+        else vddb_log "secret store: copied $_f to $2/${_f##*/}, could not remove $_f"; fi
     done
 }
 
