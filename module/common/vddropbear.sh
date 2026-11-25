@@ -389,14 +389,13 @@ vddb_listen_summary() {
 vddb_own_pid() { read -r VDDB_OWN_PID _ < /proc/self/stat 2>/dev/null; }
 
 vddb_escape_freezer() {
-    _procs="${VDDB_ROOT:-}/sys/fs/cgroup/cgroup.procs"
-    [ -w "$_procs" ] || return 0
     _cg="$(sed -n 's/^0:://p' "${VDDB_ROOT:-}/proc/self/cgroup" 2>/dev/null)"
     case "$_cg" in
         /apps/*) ;;
         *) return 0 ;;
     esac
-    if vddb_own_pid && [ -n "$VDDB_OWN_PID" ] && { echo "$VDDB_OWN_PID" > "$_procs"; } 2>/dev/null; then
+    _procs="${VDDB_ROOT:-}/sys/fs/cgroup/cgroup.procs"
+    if [ -w "$_procs" ] && vddb_own_pid && [ -n "$VDDB_OWN_PID" ] && { echo "$VDDB_OWN_PID" > "$_procs"; } 2>/dev/null; then
         vddb_log "moved pid $VDDB_OWN_PID from an app cgroup to / (freezer escape)"
         return 0
     fi

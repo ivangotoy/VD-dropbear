@@ -691,6 +691,21 @@ t_freezer_escape() {
     expect_eq "$(cat "$W/err")" "" || return 1
     grep -q "freezer escape failed: the daemon stays in /apps/uid_10001/pid_4242" "$DATA/state/daemon.log" || fail "failed move not logged"
 }
+# R2: inside an app cgroup whose cgroup.procs is not writable the escape fails loudly in the log
+# (rc 1) and prints nothing
+t_freezer_escape_not_writable() {
+    [ "$(id -u)" = 0 ] && return 77
+    mkdir -p "$ROOT/sys/fs/cgroup" "$ROOT/proc/self" "$DATA/state"
+    : > "$ROOT/sys/fs/cgroup/cgroup.procs"; chmod 444 "$ROOT/sys/fs/cgroup/cgroup.procs"
+    echo "0::/apps/uid_10001/pid_4242" > "$ROOT/proc/self/cgroup"
+    out=$(MODDIR=$MOD sh -c '. "$MODDIR/common/vddropbear.sh"; vddb_escape_freezer; echo "rc=$?"' 2>&1)
+    expect_eq "$out" "rc=1" || return 1
+    grep -q "freezer escape failed: the daemon stays in /apps/uid_10001/pid_4242" "$DATA/state/daemon.log" || { fail "failed escape not logged"; return 1; }
+    echo "0::/" > "$ROOT/proc/self/cgroup"; : > "$DATA/state/daemon.log"
+    out=$(MODDIR=$MOD sh -c '. "$MODDIR/common/vddropbear.sh"; vddb_escape_freezer; echo "rc=$?"' 2>&1)
+    expect_eq "$out" "rc=0" || return 1
+    expect_eq "$(cat "$DATA/state/daemon.log")" ""
+}
 t_disabled_not_started() {
     cfg ENABLED=0
     out=$(sh "$MOD/action.sh")
@@ -1086,7 +1101,7 @@ PY
 
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_bfu_move_failure_reported t_bfu_rename_failure_reported t_bfu_move_odd_names t_bfu_switch_nothing_to_move t_bfu_stale_temp_ignored t_webui_status t_webui_verbs_exit_zero
-t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_freezer_escape t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
+t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_freezer_escape t_freezer_escape_not_writable t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
 t_service_disabled t_customize t_uninstall t_sha256_gate t_build_zip_sha256 t_build_fetch_partial t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_build_kills_build_user t_workflow_builds_dispatched_commit"
 
 for c in $CASES; do run_case "$c"; done
