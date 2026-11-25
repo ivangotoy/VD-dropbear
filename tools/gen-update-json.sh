@@ -28,6 +28,9 @@ set -e
 cd "$(dirname "$0")/.."
 ver=$(grep '^version=' module/module.prop | cut -d= -f2)
 vc=$(grep '^versionCode=' module/module.prop | cut -d= -f2)
+# both go into the JSON unquoted/quoted as-is: refuse a module.prop that lacks them
+[ -n "$ver" ] || { echo "gen-update-json: no version= in module/module.prop" >&2; exit 1; }
+case "$vc" in ''|*[!0-9]*) echo "gen-update-json: versionCode in module/module.prop is not a number: '$vc'" >&2; exit 1 ;; esac
 cat > module/update.json <<EOF
 {
   "version": "$ver",
