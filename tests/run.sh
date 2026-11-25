@@ -436,6 +436,15 @@ t_bfu_move_odd_names() {
     expect_eq "$(cat "$DE/hostkey_ed25519" 2>/dev/null)" "KEPT de" || return 1
     expect_eq "$(cat "$CE/hostkey_ed25519" 2>/dev/null)" "FAKEKEY ce" || fail "host key left in the source store deleted"
 }
+# A START_IN_BFU switch with no secret to move yet (fresh install: the source store missing, or
+# present and empty) answers ok and saves the new mode
+t_bfu_switch_nothing_to_move() {
+    expect_eq "$(webui_in "$(printf 'START_IN_BFU=1\nPORT=2299')" set-config)" ok || return 1
+    expect_has "$(cat "$DATA/config")" "START_IN_BFU='1'" || return 1
+    mkdir -p "$DE"; chmod 700 "$DE"
+    expect_eq "$(webui_in "$(printf 'START_IN_BFU=0\nPORT=2299')" set-config)" ok || return 1
+    expect_has "$(cat "$DATA/config")" "START_IN_BFU='0'"
+}
 t_webui_status() {
     cfg PORT=2299
     s=$(webui status)
@@ -1062,7 +1071,7 @@ PY
 }
 
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
-t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_bfu_move_failure_reported t_bfu_rename_failure_reported t_bfu_move_odd_names t_webui_status t_webui_verbs_exit_zero
+t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_bfu_move_failure_reported t_bfu_rename_failure_reported t_bfu_move_odd_names t_bfu_switch_nothing_to_move t_webui_status t_webui_verbs_exit_zero
 t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_freezer_escape t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
 t_service_disabled t_customize t_uninstall t_sha256_gate t_build_zip_sha256 t_build_fetch_partial t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_build_kills_build_user t_workflow_builds_dispatched_commit"
 
