@@ -42,6 +42,12 @@ module (`module.prop`) and on GitHub Releases.
   manager being put to sleep. `setsid` was never enough: it detaches the session, not the cgroup.
   Diagnosed and fixed by Konstantin Nikiforov (@helllamer, GitHub PR #3).
 
+### Fixed (Forgejo fork build)
+- Switching START_IN_BFU in the WebUI also fails with `err: secrets not moved` and changes nothing when a
+  secret cannot be renamed into the other store, instead of answering `ok` with the secret left in the old one.
+- A start that cannot leave the manager app's cgroup logs it in `daemon.log` instead of failing silently, and
+  no longer prints a shell error in the Action output.
+
 ## [v1.12] (2026-11-24)
 
 ### Changed
