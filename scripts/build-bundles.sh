@@ -51,6 +51,14 @@ ZLIB_VERSION="${ZLIB_VERSION:-1.3.1}"
 RSYNC_VERSION="${RSYNC_VERSION:-3.4.1}"
 OPENSSH_VERSION="${OPENSSH_VERSION:-9.9p2}"
 OPENSSH_TAG="V_$(echo "$OPENSSH_VERSION" | tr 'p.' 'P_' | tr '[:lower:]' '[:upper:]')"  # 9.9p2 -> V_9_9_P2
+# sha256 of each source tarball for the versions above; fetch() refuses any other bytes before they
+# are extracted (a changed version needs its own pin). The release tarballs carry upstream's detached
+# signatures (zlib: Mark Adler, rsync: Andrew Tridgell, OpenSSH: Damien Miller) and were checked against
+# them when pinned; GitHub's generated archive of the OpenSSH tag (the fallback) has no signature.
+ZLIB_SHA256="${ZLIB_SHA256:-9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23}"
+RSYNC_SHA256="${RSYNC_SHA256:-2924bcb3a1ed8b551fc101f740b9f0fe0a202b115027647cf69850d65fd88c52}"
+OPENSSH_SHA256="${OPENSSH_SHA256:-91aadb603e08cc285eddf965e1199d02585fa94d994d6cae5b41e1721e215673}"
+OPENSSH_GH_SHA256="${OPENSSH_GH_SHA256:-082dffcf651b9db762ddbe56ca25cc75a0355a7bea41960b47f3c139974c5e3e}"
 
 WORK="$ROOT/build/bundles"
 TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/$(uname | tr '[:upper:]' '[:lower:]')-x86_64/bin"
@@ -66,16 +74,21 @@ triple() {
   esac
 }
 
-fetch() { # url outfile
-  [ -f "$2" ] && return 0
-  curl -fsSL -o "$2.part" "$1" && mv -f "$2.part" "$2"
+fetch() { # url outfile sha256: a download, or a cached copy, with other bytes is refused
+  if [ ! -f "$2" ]; then
+    curl -fsSL -o "$2.part" "$1" || return 1
+    mv -f "$2.part" "$2"
+  fi
+  [ "$(sha256sum "$2" | cut -d' ' -f1)" = "$3" ] && return 0
+  echo "fetch: $2 (from $1) does not have the pinned sha256 $3" >&2
+  rm -f "$2"; return 1
 }
 
 echo "==> fetching sources (zlib $ZLIB_VERSION, rsync $RSYNC_VERSION, openssh $OPENSSH_VERSION)"
-fetch "https://github.com/madler/zlib/releases/download/v$ZLIB_VERSION/zlib-$ZLIB_VERSION.tar.gz" "$WORK/zlib.tar.gz"
-fetch "https://download.samba.org/pub/rsync/src/rsync-$RSYNC_VERSION.tar.gz" "$WORK/rsync.tar.gz"
-fetch "https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-$OPENSSH_VERSION.tar.gz" "$WORK/openssh.tar.gz" \
-  || fetch "https://github.com/openssh/openssh-portable/archive/refs/tags/$OPENSSH_TAG.tar.gz" "$WORK/openssh.tar.gz"
+fetch "https://github.com/madler/zlib/releases/download/v$ZLIB_VERSION/zlib-$ZLIB_VERSION.tar.gz" "$WORK/zlib.tar.gz" "$ZLIB_SHA256"
+fetch "https://download.samba.org/pub/rsync/src/rsync-$RSYNC_VERSION.tar.gz" "$WORK/rsync.tar.gz" "$RSYNC_SHA256"
+fetch "https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-$OPENSSH_VERSION.tar.gz" "$WORK/openssh.tar.gz" "$OPENSSH_SHA256" \
+  || fetch "https://github.com/openssh/openssh-portable/archive/refs/tags/$OPENSSH_TAG.tar.gz" "$WORK/openssh.tar.gz" "$OPENSSH_GH_SHA256"
 
 # OpenSSH cross-compile cache seed: functions bionic lacks that configure
 # mis-detects, and the few it reports absent but whose symbol lives in libc.a.
