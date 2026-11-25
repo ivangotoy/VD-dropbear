@@ -45,7 +45,9 @@ specific is runtime config or a secret.
   and detaches the daemon into its own session, so the manager does not hang.
 - `module/common/vddb-webui.sh` + `module/webroot/index.html`: the WebUI backend and page.
 - `patches/`: small, auditable patches applied to upstream Dropbear at build time.
-- `scripts/build.sh`, `scripts/build-bundles.sh`, `.github/workflows/release.yml`: the build.
+- `scripts/build.sh`, `scripts/build-bundles.sh`: build the committed binaries; `.github/workflows/release.yml`
+  packs and publishes the upstream release. This fork's releases come from `.forgejo/module-ci.sh` and
+  `.forgejo/module-ci.conf` instead (the GitHub workflows do not run here).
 
 ## Daemon lifecycle (single instance)
 
