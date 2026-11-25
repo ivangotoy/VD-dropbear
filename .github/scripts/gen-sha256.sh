@@ -51,7 +51,7 @@ for dir; do
 	[ -d "$dir" ] || { echo "gen-sha256: not a directory: $dir" >&2; rc=2; continue; }
 	if [ "$mode" = gen ]; then
 		find "$dir" -type f ! -name '*.sha256' -exec sh -c '
-			for f; do ( cd "$(dirname "$f")" && sha256sum "$(basename "$f")" >"$(basename "$f").sha256" ); done
+			for f; do ( cd "$(dirname "$f")" && sha256sum "$(basename "$f")" >"$(basename "$f").sha256" ) || exit 1; done
 		' _ {} +
 		echo "gen-sha256: $dir -> $(find "$dir" -type f -name '*.sha256' | wc -l | tr -d ' ') companions"
 	else

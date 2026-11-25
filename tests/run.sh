@@ -828,6 +828,22 @@ t_sha256_gate() {
     expect_has "$out" "sha256 mismatch: action.sh.sha256"
 }
 
+# F5: a file sha256sum fails on stops gen-sha256 with a non-zero status (it used to count only
+# the last file of each find batch, leaving an empty companion and exit 0). The stub fails on its
+# first call only, so the result does not depend on the order find lists the files in.
+t_gen_sha256_failure() {
+    _real=$(command -v sha256sum) || return 77
+    mkdir -p "$W/p"; for _f in a b c d; do echo "$_f" > "$W/p/$_f"; done
+    cat > "$STUB/sha256sum" <<EOF
+#!/bin/sh
+[ -e "$W/failed-once" ] || { : > "$W/failed-once"; echo "sha256sum: read error" >&2; exit 1; }
+exec "$_real" "\$@"
+EOF
+    chmod 755 "$STUB/sha256sum"
+    sh "$REPO/.github/scripts/gen-sha256.sh" "$W/p" > "$W/out" 2>&1; rc=$?
+    [ -e "$W/failed-once" ] || { fail "stub not called"; return 1; }
+    [ "$rc" != 0 ] || fail "a failed hash exited 0: $(tr '\n' ' ' < "$W/out")"
+}
 # build_zip <outdir>: the real build() from .forgejo/module-ci.conf, run by bash as module-ci.sh
 # build-user runs it, on a tar copy of the files it reads; the zip lands in <outdir>/module.zip
 build_zip() {
@@ -1138,7 +1154,7 @@ PY
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_add_key_commented t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_bfu_move_failure_reported t_bfu_rename_failure_reported t_bfu_move_odd_names t_bfu_switch_nothing_to_move t_bfu_stale_temp_ignored t_webui_status t_webui_verbs_exit_zero
 t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_freezer_escape t_freezer_escape_not_writable t_freezer_escape_uid_layout t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
-t_service_disabled t_customize t_uninstall t_sha256_gate t_build_zip_sha256 t_build_fetch_partial t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_build_kills_build_user t_workflow_builds_dispatched_commit"
+t_service_disabled t_customize t_uninstall t_sha256_gate t_gen_sha256_failure t_build_zip_sha256 t_build_fetch_partial t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_build_kills_build_user t_workflow_builds_dispatched_commit"
 
 for c in $CASES; do run_case "$c"; done
 echo "summary: pass=$PASS fail=$FAIL skip=$SKIP${FAILED:+ failed:$FAILED}"
