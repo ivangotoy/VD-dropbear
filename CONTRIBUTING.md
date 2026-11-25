@@ -37,7 +37,7 @@ are reviewed with that in mind.
 ```
 module/     the installable KernelSU / APatch / Magisk module (scripts, WebUI, config, installer)
 patches/    the patch set applied on top of upstream Dropbear (the only changes to the SSH server)
-src/        where CI unpacks upstream Dropbear to build (not committed)
+build/      where scripts/build.sh unpacks and builds upstream Dropbear (not committed)
 scripts/    build and maintenance helpers
 .github/    CI workflows and issue/PR templates
 docs/       documentation (mirrored to the wiki)
@@ -45,11 +45,13 @@ docs/       documentation (mirrored to the wiki)
 
 ## Building
 
-The binary is produced by CI from **upstream [mkj/dropbear](https://github.com/mkj/dropbear)** plus the
-patches in `patches/`. To build locally you need the Android NDK:
+The server binaries in `module/bin/<abi>/` (`vddropbear`, `dropbearkey`) are built locally from
+**upstream [mkj/dropbear](https://github.com/mkj/dropbear)** plus the patches in `patches/`;
+`scripts/build-bundles.sh` builds the bundled `sftp-server`, `scp` and `rsync`. All are committed with their
+sha256 in `module/bin/PROVENANCE.json`, which CI checks before it assembles the zip. You need the Android NDK:
 
 ```sh
-scripts/build.sh            # fetches the tracked upstream, applies patches, builds arm64 + arm32
+scripts/build.sh            # fetches the tracked upstream, applies patches, builds all four ABIs into module/bin/
 ```
 
 The patch set is intentionally minimal and auditable: a neutral/configurable identity string,
@@ -61,7 +63,7 @@ configuration. Please keep new patches small, documented, and justified in the P
 - One logical change per PR; describe the motivation and the security impact.
 - Match the existing shell style (POSIX `sh` / Android `mksh`; no bashisms).
 - Every file carries a short SPDX header; keep it.
-- Update [`CHANGELOG.md`](CHANGELOG.md) under `[Unreleased]` for any real, user-visible change.
+- Update [`CHANGELOG.md`](CHANGELOG.md) for any real, user-visible change.
 - By submitting a PR you agree to license your contribution under the project's [Apache-2.0](LICENSE) license.
 
 ## Translations
