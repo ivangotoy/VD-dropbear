@@ -86,7 +86,7 @@ For faster, steadier transfers with no network in the path, reach the daemon ove
 1. Plug in the cable, then on the phone turn on **USB tethering** (Settings -> Network -> Hotspot and
    tethering).
 2. The phone joins a small USB-only network, usually at `192.168.42.129`.
-3. Back in step 4 above, add that address to the **specific binds** (`LISTEN_ADDRESSES`) and leave **all
+3. Back in step 4 above, add that address to **Extra binds** (`LISTEN_ADDRESSES`) and leave **all
    interfaces** off, so the daemon answers only through the cable.
 
 Then connect to the USB address instead of the wireless one:
@@ -118,7 +118,7 @@ At boot the daemon waits up to 15 minutes for that first unlock. If you unlock l
 
 ## Troubleshooting
 
-- **It will not start.** Check `/data/adb/vddropbear/state/daemon.log`. Make sure **Enabled** is on
+- **It will not start.** Check `/data/adb/vddropbear/state/daemon.log`. Make sure **Enabled at boot** is on
   and a host key could be generated.
 - **Key rejected.** Confirm the public key line is exactly as your client offers it, and that the
   username you log in as is one the system resolves (usually `root`).
