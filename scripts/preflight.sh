@@ -94,7 +94,7 @@ hits=$(grep -rlE 'README\.in\.md|docs/in/|\]\(in/|wiki/in-|^  in\) printf|"hi", 
 echo "[6] gen-doc-nav idempotent"
 if [ -f .github/scripts/gen-doc-nav.py ]; then
   out=$(python3 .github/scripts/gen-doc-nav.py . 2>&1)
-  echo "$out" | grep -q '0 switcher(s), 0 footer(s)' \
+  echo "$out" | grep -q 'gen-doc-nav: 0 switcher(s), 0 footer(s)' \
     && ok "nav/footer already canonical ($out)" || bad "nav/footer not idempotent ($out) - commit the regen"
 else info "no gen-doc-nav.py"; fi
 
