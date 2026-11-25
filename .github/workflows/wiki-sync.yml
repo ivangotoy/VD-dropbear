@@ -33,7 +33,14 @@ on:
     paths:
       - 'docs/**'
       - '.github/scripts/gen_wiki.sh'
+      - '.github/scripts/wiki.conf'
       - '.github/workflows/wiki-sync.yml'
+      # gen_wiki.sh also reads the English root docs, CHANGELOG and the README taglines
+      - 'README*.md'
+      - 'CHANGELOG.md'
+      - 'CONTRIBUTING.md'
+      - 'CODE_OF_CONDUCT.md'
+      - 'SECURITY.md'
   workflow_dispatch: {}
 
 permissions:
