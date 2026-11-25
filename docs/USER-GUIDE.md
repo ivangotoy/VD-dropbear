@@ -120,8 +120,8 @@ At boot the daemon waits up to 15 minutes for that first unlock. If you unlock l
 
 - **It will not start.** Check `/data/adb/vddropbear/state/daemon.log`. Make sure **Enabled at boot** is on
   and a host key could be generated.
-- **Key rejected.** Confirm the public key line is exactly as your client offers it, and that the
-  username you log in as is one the system resolves (usually `root`).
+- **Key rejected.** Confirm the public key line is exactly as your client offers it, and that you log
+  in as `root`: keys log in as root only (a `shell` or `system` login needs a password account).
 - **Can't connect from another machine.** You are probably still bound to loopback only; enable the
   interface you need and restart.
 - **SFTP/scp fails but shell works.** Make sure the bundled `sftp-server` shipped for your ABI; the
