@@ -140,8 +140,19 @@ vddb_secret_dir() {
 # are removed and it returns 1; vddb_unmove_secrets undoes a commit the same way);
 # once the new config is installed, vddb_drop_sources removes the moved sources.
 # A file that already exists in $2 is kept and its counterpart stays in $1.
+# Only the names staged by this call are renamed or removed: a stale temp left by an
+# earlier run whose pid this one reuses is never renamed over a kept file.
+# VDDB_STAGED and VDDB_MOVED list file names as /name1/name2/ ("/" cannot occur in a name).
 # Needs CE storage unlocked.
+vddb_listed() { case "$1" in */"$2"/*) return 0 ;; esac; return 1; }
+vddb_drop_temps() {
+    for _s in "$1"/hostkey_* "$1/authorized_keys" "$1/passwd"; do
+        vddb_listed "$VDDB_STAGED" "${_s##*/}" && rm -f "$2/${_s##*/}.tmp.$$" 2>/dev/null
+    done
+    VDDB_STAGED=/
+}
 vddb_stage_secrets() {
+    VDDB_STAGED=/
     vddb_ce_ready || { vddb_log "secrets not moved: CE storage is locked"; return 1; }
     [ -d "$1" ] || return 0
     mkdir -p "$2" 2>/dev/null; chmod 700 "$2" 2>/dev/null
@@ -149,26 +160,27 @@ vddb_stage_secrets() {
         [ -f "$_s" ] || continue
         _t="$2/${_s##*/}"
         if [ -e "$_t" ]; then vddb_log "secret store: kept $_t, left $_s"; continue; fi
+        VDDB_STAGED="$VDDB_STAGED${_s##*/}/"
         cp "$_s" "$_t.tmp.$$" 2>/dev/null && chmod 600 "$_t.tmp.$$" 2>/dev/null && continue
         vddb_log "secret store: could not copy $_s to $2, nothing moved"
-        rm -f "$2"/*.tmp.$$ 2>/dev/null
+        vddb_drop_temps "$1" "$2"
         return 1
     done
 }
-# VDDB_MOVED lists the renamed file names as /name1/name2/ ("/" cannot occur in a name).
 vddb_commit_secrets() {
     VDDB_MOVED=/
-    for _p in "$2"/*.tmp.$$; do
-        [ -f "$_p" ] || continue
-        _t="${_p%.tmp.$$}"
-        if mv -f "$_p" "$_t" 2>/dev/null; then VDDB_MOVED="$VDDB_MOVED${_t##*/}/"; continue; fi
-        vddb_log "secret store: could not rename $_p, nothing moved"
+    for _s in "$1"/hostkey_* "$1/authorized_keys" "$1/passwd"; do
+        vddb_listed "$VDDB_STAGED" "${_s##*/}" || continue
+        _t="$2/${_s##*/}"
+        if mv -f "$_t.tmp.$$" "$_t" 2>/dev/null; then VDDB_MOVED="$VDDB_MOVED${_t##*/}/"; continue; fi
+        vddb_log "secret store: could not rename $_t.tmp.$$, nothing moved"
         vddb_unmove_secrets "$2"
-        rm -f "$2"/*.tmp.$$ 2>/dev/null
+        vddb_drop_temps "$1" "$2"
         return 1
     done
+    VDDB_STAGED=/
 }
-vddb_moved() { case "$VDDB_MOVED" in */"$1"/*) return 0 ;; esac; return 1; }
+vddb_moved() { vddb_listed "$VDDB_MOVED" "$1"; }
 vddb_unmove_secrets() {
     for _f in "$1"/hostkey_* "$1/authorized_keys" "$1/passwd"; do
         [ -f "$_f" ] && vddb_moved "${_f##*/}" && rm -f "$_f" 2>/dev/null
