@@ -373,6 +373,50 @@ t_bfu_move_failure_reported() {
     [ "$rc" != 0 ] || { fail "exit 0 when passwd cannot be copied"; return 1; }
     rmdir "$DE" 2>/dev/null; unchanged
 }
+# U3: a START_IN_BFU switch whose rename into the target store fails (the last file), or whose
+# config install fails after the renames, answers an error and changes nothing: the config keeps
+# its mode, every secret stays in the old store, the target store holds only what it held before.
+# The source removal after a completed move is logged when it fails. mv and rm are PATH stubs
+# that fail for one destination (FAIL_MV / FAIL_RM) and leave a marker, else run the real tool.
+t_bfu_rename_failure_reported() {
+    h='pbkdf2-sha256$600000$00112233$0011223344556677889900112233445566778899001122334455667788990011'
+    for _t in mv rm; do
+        _r=$(command -v "$_t") || { fail "no $_t"; return 1; }
+        _v=$(echo "FAIL_$_t" | tr a-z A-Z)
+        printf '#!/bin/sh\nfor a; do l=$a; done\nif [ -n "$%s" ] && [ "$l" = "$%s" ]; then : > "%s/%s-failed"; exit 1; fi\nexec %s "$@"\n' \
+            "$_v" "$_v" "$W" "$_t" "$_r" > "$STUB/$_t"
+        chmod 755 "$STUB/$_t"
+    done
+    expect_eq "$(webui_in "$(printf 'START_IN_BFU=0\nPORT=2299')" set-config)" ok || return 1
+    expect_eq "$(webui_in "ssh-ed25519 AAAAexample1 one@example" add-key)" ok || return 1
+    expect_eq "$(webui_in "$h" set-pw root)" ok || return 1
+    printf 'FAKEKEY ed25519\n' > "$CE/hostkey_ed25519"; chmod 600 "$CE/hostkey_ed25519"
+    mkdir -p "$DE"; chmod 700 "$DE"; printf 'KEPT ed25519\n' > "$DE/hostkey_ed25519"
+    c=$(cat "$DATA/config")
+    unchanged() {
+        expect_eq "$(cat "$DATA/config")" "$c" || return 1
+        for f in authorized_keys passwd hostkey_ed25519; do [ -f "$CE/$f" ] || { fail "$f gone from CE"; return 1; }; done
+        expect_eq "$(ls -A "$DE" | tr '\n' ' ')" "hostkey_ed25519 " || return 1
+        expect_eq "$(cat "$DE/hostkey_ed25519")" "KEPT ed25519" || return 1
+        [ -z "$(ls "$DATA" | grep config.new)" ] || fail "config temp left"
+    }
+    out=$(FAIL_MV=$DE/passwd webui_in "$(printf 'START_IN_BFU=1\nPORT=2299')" set-config); rc=$?
+    [ -e "$W/mv-failed" ] || { fail "mv stub not reached"; return 1; }
+    expect_eq "$out" "err: secrets not moved" || return 1
+    [ "$rc" != 0 ] || { fail "exit 0 when a secret could not be renamed"; return 1; }
+    unchanged || return 1
+    rm -f "$W/mv-failed"
+    out=$(FAIL_MV=$DATA/config webui_in "$(printf 'START_IN_BFU=1\nPORT=2299')" set-config); rc=$?
+    [ -e "$W/mv-failed" ] || { fail "mv stub not reached (config)"; return 1; }
+    expect_eq "$out" "err: install failed" || return 1
+    [ "$rc" != 0 ] || { fail "exit 0 when the config could not be installed"; return 1; }
+    unchanged || return 1
+    out=$(FAIL_RM=$CE/passwd webui_in "$(printf 'START_IN_BFU=1\nPORT=2299')" set-config)
+    [ -e "$W/rm-failed" ] || { fail "rm stub not reached"; return 1; }
+    expect_eq "$out" ok || return 1
+    expect_eq "$(cat "$DE/passwd")" "root:$h" || return 1
+    grep -q "could not remove $CE/passwd" "$DATA/state/daemon.log" || fail "failed source removal not logged"
+}
 t_webui_status() {
     cfg PORT=2299
     s=$(webui status)
@@ -974,7 +1018,7 @@ PY
 }
 
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
-t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_bfu_move_failure_reported t_webui_status t_webui_verbs_exit_zero
+t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_bfu_move_failure_reported t_bfu_rename_failure_reported t_webui_status t_webui_verbs_exit_zero
 t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
 t_service_disabled t_customize t_uninstall t_sha256_gate t_build_zip_sha256 t_build_fetch_partial t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_build_kills_build_user t_workflow_builds_dispatched_commit"
 

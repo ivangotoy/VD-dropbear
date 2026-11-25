@@ -132,10 +132,13 @@ vddb_secret_dir() {
 }
 
 # Move the secrets (host keys, authorized_keys, passwd) from store $1 to store $2
-# when START_IN_BFU is switched from the WebUI, in two steps so that a failure
-# changes nothing: vddb_stage_secrets copies every file that moves to a 0600 temp
-# in $2 (on any failure the temps are removed and it returns 1), and
-# vddb_commit_secrets renames the temps to their names and removes the sources.
+# when START_IN_BFU is switched from the WebUI, in three steps so that a failure
+# up to the config install changes nothing: vddb_stage_secrets copies every file
+# that moves to a 0600 temp in $2 (on any failure the temps are removed and it
+# returns 1); vddb_commit_secrets renames the temps to their names, the sources
+# still in place (on a failed rename the files it renamed and the remaining temps
+# are removed and it returns 1; vddb_unmove_secrets undoes a commit the same way);
+# once the new config is installed, vddb_drop_sources removes the moved sources.
 # A file that already exists in $2 is kept and its counterpart stays in $1.
 # Needs CE storage unlocked.
 vddb_stage_secrets() {
@@ -153,14 +156,25 @@ vddb_stage_secrets() {
     done
 }
 vddb_commit_secrets() {
+    VDDB_MOVED=""
     for _p in "$2"/*.tmp.$$; do
         [ -f "$_p" ] || continue
-        _t="${_p%.tmp.$$}"; _s="$1/${_t##*/}"
-        if mv -f "$_p" "$_t" 2>/dev/null; then
-            rm -f "$_s"; vddb_log "secret store: moved $_s to $_t"
-        else
-            rm -f "$_p"; vddb_log "secret store: could not move $_s"
-        fi
+        _t="${_p%.tmp.$$}"
+        if mv -f "$_p" "$_t" 2>/dev/null; then VDDB_MOVED="$VDDB_MOVED ${_t##*/}"; continue; fi
+        vddb_log "secret store: could not rename $_p, nothing moved"
+        vddb_unmove_secrets "$2"
+        rm -f "$2"/*.tmp.$$ 2>/dev/null
+        return 1
+    done
+}
+vddb_unmove_secrets() {
+    for _m in $VDDB_MOVED; do rm -f "$1/$_m" 2>/dev/null; done
+    VDDB_MOVED=""
+}
+vddb_drop_sources() {
+    for _m in $VDDB_MOVED; do
+        if rm -f "$1/$_m" 2>/dev/null; then vddb_log "secret store: moved $1/$_m to $2/$_m"
+        else vddb_log "secret store: copied $1/$_m to $2/$_m, could not remove $1/$_m"; fi
     done
 }
 
