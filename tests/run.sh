@@ -933,7 +933,11 @@ t_build_fetch_pinned() {
     printf '#!/bin/sh\nexit 22\n' > "$STUB/curl"
     _h2=$(printf 'fallback archive' | sha256sum | cut -d' ' -f1); printf 'fallback archive' > "$W/c.tar.gz"
     ( . "$W/fetch.sh"; fetch https://example.invalid/c.tar.gz "$W/c.tar.gz" "$_h" "$_h2" ) || { fail "cached copy with the second pin refused"; return 1; }
-    expect_eq "$(cat "$W/c.tar.gz")" "fallback archive"
+    expect_eq "$(cat "$W/c.tar.gz")" "fallback archive" || return 1
+    # sha256sum unavailable (fails with no output): the fetch fails and the cached copy is kept
+    printf '#!/bin/sh\nexit 1\n' > "$STUB/sha256sum"; chmod 755 "$STUB/sha256sum"
+    ( . "$W/fetch.sh"; fetch https://example.invalid/c.tar.gz "$W/c.tar.gz" "$_h" "$_h2" ) 2>/dev/null && { fail "fetch without sha256sum exited 0"; return 1; }
+    [ -f "$W/c.tar.gz" ] || fail "cached copy deleted when it could not be hashed"
 }
 
 # F32: module-ci.sh release: cleanup() deletes only a release the forge still reports as a
