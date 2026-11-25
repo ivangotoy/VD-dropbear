@@ -21,9 +21,10 @@
 #  E-mail         : vd.priv8@pm.me
 # ======================================================================
 #
-#  STANDARDS.md §7: canonical split - ci.yml (this, push/PR) + release.yml (tag -> publish).
+#  STANDARDS.md §7: canonical split - ci.yml (this, push/PR) + release.yml (manual dispatch -> tag + publish).
 #  The real build/publish lives in release.yml; keep this cheap and build-free-ish.
-#  Third-party actions are pinned by commit SHA (STANDARDS §7.1, supply-chain safety).
+#  Only GitHub's own actions (actions/*) are used, by major tag; a third-party action would be pinned
+#  by commit SHA (STANDARDS §7.1, supply-chain safety).
 
 name: CI
 
