@@ -122,7 +122,7 @@ for wf in .github/workflows/*.yml .github/workflows/*.yaml; do
   grep -qE 'action-gh-release|gh release create' "$wf" || continue
   grep -qE '^[[:space:]]*draft:[[:space:]]*true' "$wf" \
     && { bad "draft: true in $(basename "$wf") (a UI publish attributes the release to a human)"; rel_bad=1; }
-  grep -iE '^[[:space:]]*token:' "$wf" | grep -ivE 'github\.token|secrets\.GITHUB_TOKEN' | grep -q . \
+  grep -iE '^[[:space:]]*(token|GH_TOKEN|GITHUB_TOKEN):' "$wf" | grep -ivE 'github\.token|secrets\.GITHUB_TOKEN' | grep -q . \
     && { bad "custom release token in $(basename "$wf") (a PAT attributes the release to a user; use the default GITHUB_TOKEN)"; rel_bad=1; }
 done
 [ "$rel_bad" = 0 ] && ok "release workflow publishes direct as github-actions[bot] (no draft, no PAT)"
