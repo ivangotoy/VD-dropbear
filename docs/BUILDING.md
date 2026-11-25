@@ -184,8 +184,9 @@ encodes the fix; for the record, the pieces are:
 
 1. **A cache seed of functions bionic lacks** but configure thinks it has, so the
    compat versions get compiled instead: `recallocarray`, `close_range`,
-   `getentropy`, `getrandom`, `nl_langinfo`, `setpwent`/`getpwent`/`endpwent`,
-   `crypt`, `futimes`, `lutimes`, `strtonum`, `pledge`, `explicit_bzero`.
+   `setpwent`/`getpwent`/`endpwent`, `crypt`, `futimes`, `lutimes`, `strtonum`,
+   `pledge`, `explicit_bzero`. (`nl_langinfo` and `mblen` are not seeded: the
+   bundles build at API 28, where bionic has them.)
 2. **`-DHAVE_ATTRIBUTE__SENTINEL__=1 -DHAVE_ATTRIBUTE__NONNULL__=1`.** Without
    these, OpenSSH's `defines.h` does `#define __sentinel__` (empty), which then
    mangles bionic's own `__attribute__((__sentinel__(1)))` in `<unistd.h>` and
