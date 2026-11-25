@@ -1242,10 +1242,28 @@ t_preflight_release_pat() {
     out=$(pf_run "$W/pf")
     expect_has "$out" "no draft, no PAT"
 }
+# repack-baseline.sh packs HEAD plus working changes (a temporary index) but took the 0755 modes from
+# the real index: an executable not yet staged was packed 0644. The pack/sign tools are stubs; the
+# pack stub records the modes it was given. Needs bash, python3 and git.
+t_repack_baseline_modes() {
+    for _t in bash python3 git; do command -v "$_t" >/dev/null 2>&1 || return 77; done
+    _r=$W/rb; mkdir -p "$_r/scripts" "$_r/module" "$_r/p"
+    cp "$REPO/scripts/repack-baseline.sh" "$_r/scripts/"
+    printf 'version=v1.00\nversionCode=10000\n' > "$_r/module/module.prop"
+    for _f in LICENSE NOTICE THIRD-PARTY-NOTICES.md; do echo x > "$_r/$_f"; done
+    (cd "$_r" && git init -q && git add -A && git -c user.name=t -c user.email=t@example.invalid commit -qm seed) || { fail "fixture repo"; return 1; }
+    printf '#!/bin/sh\necho new\n' > "$_r/module/new.sh"; chmod 755 "$_r/module/new.sh"
+    printf '%s\n' 'import os, stat, sys' 'm = os.path.join(sys.argv[1], "new.sh")' \
+        'open(sys.argv[-1], "w").write(oct(stat.S_IMODE(os.stat(m).st_mode)))' 'sys.exit(1)' > "$_r/p/pack"
+    echo key > "$_r/p/key"; printf '#!/bin/sh\nexit 0\n' > "$_r/p/sign"; chmod 755 "$_r/p/sign"
+    (cd "$_r" && VDLU_PACK="$_r/p/pack" VDLU_SIGN="$_r/p/sign" VDLU_KEY="$_r/p/key" \
+        sh scripts/repack-baseline.sh --prev "$_r/p/mode") > "$W/out" 2>&1
+    expect_eq "$(cat "$_r/p/mode" 2>/dev/null)" "0o755"
+}
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_add_key_commented t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_bfu_move_failure_reported t_bfu_rename_failure_reported t_bfu_move_odd_names t_bfu_switch_nothing_to_move t_bfu_stale_temp_ignored t_webui_status t_webui_verbs_exit_zero
 t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_freezer_escape t_freezer_escape_not_writable t_freezer_escape_uid_layout t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
-t_service_disabled t_customize t_uninstall t_sha256_gate t_gen_sha256_failure t_build_zip_sha256 t_build_zip_reproducible t_build_fetch_partial t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_build_kills_build_user t_workflow_builds_dispatched_commit t_ci_validate_json t_ci_parity_failure t_preflight_docnav_count t_preflight_release_pat"
+t_service_disabled t_customize t_uninstall t_sha256_gate t_gen_sha256_failure t_build_zip_sha256 t_build_zip_reproducible t_build_fetch_partial t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_build_kills_build_user t_workflow_builds_dispatched_commit t_ci_validate_json t_ci_parity_failure t_preflight_docnav_count t_preflight_release_pat t_repack_baseline_modes"
 
 for c in $CASES; do run_case "$c"; done
 echo "summary: pass=$PASS fail=$FAIL skip=$SKIP${FAILED:+ failed:$FAILED}"

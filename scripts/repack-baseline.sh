@@ -66,7 +66,7 @@ git archive --format=tar "$tree" module/ | tar -x -C "$WORK"
 #    baseline is the recurring bug this script exists to prevent).
 find "$WORK/module" -type d -exec chmod 0755 {} +
 find "$WORK/module" -type f -exec chmod 0644 {} +
-git ls-files -s module/ | awk '$1=="100755"{print $4}' | while IFS= read -r f; do
+GIT_INDEX_FILE="$idx" git ls-files -s module/ | awk '$1=="100755"{print $4}' | while IFS= read -r f; do
   chmod 0755 "$WORK/module/${f#module/}" 2>/dev/null || true
 done
 
