@@ -1198,10 +1198,24 @@ t_ci_validate_json() {
     (cd "$W/r" && bash -e "$W/step.sh") > "$W/out" 2>&1 || fail "valid files failed: $(tr '\n' ' ' < "$W/out")"
 }
 
+# T7: ci.yml "Kit + engine parity" fails when a parity script exists and fails, instead of
+# reporting it as a skip; absent scripts still skip. Needs bash and python3.
+t_ci_parity_failure() {
+    command -v bash >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1 || return 77
+    gh_step "$REPO/.github/workflows/ci.yml" "Kit + engine parity (skip if references absent)" > "$W/step.sh" || { fail "step not found"; return 1; }
+    mkdir -p "$W/g/repo/.github/scripts" "$W/g/VD-ModuleKit/tooling"
+    echo 'exit 0' > "$W/g/repo/.github/scripts/release-workflow-lint.sh"
+    (cd "$W/g/repo" && bash -e "$W/step.sh") > "$W/out" 2>&1 || { fail "absent references failed: $(tr '\n' ' ' < "$W/out")"; return 1; }
+    expect_eq "$(grep -c '(skip)' "$W/out")" 2 || return 1
+    echo 'echo "vendor-parity: drift"; exit 1' > "$W/g/VD-ModuleKit/tooling/vendor-parity.sh"
+    if (cd "$W/g/repo" && bash -e "$W/step.sh") > "$W/out" 2>&1; then
+        fail "failing vendor-parity passed: $(tr '\n' ' ' < "$W/out")"
+    fi
+}
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_add_key_commented t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_bfu_move_failure_reported t_bfu_rename_failure_reported t_bfu_move_odd_names t_bfu_switch_nothing_to_move t_bfu_stale_temp_ignored t_webui_status t_webui_verbs_exit_zero
 t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_freezer_escape t_freezer_escape_not_writable t_freezer_escape_uid_layout t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
-t_service_disabled t_customize t_uninstall t_sha256_gate t_gen_sha256_failure t_build_zip_sha256 t_build_zip_reproducible t_build_fetch_partial t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_build_kills_build_user t_workflow_builds_dispatched_commit t_ci_validate_json"
+t_service_disabled t_customize t_uninstall t_sha256_gate t_gen_sha256_failure t_build_zip_sha256 t_build_zip_reproducible t_build_fetch_partial t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_build_kills_build_user t_workflow_builds_dispatched_commit t_ci_validate_json t_ci_parity_failure"
 
 for c in $CASES; do run_case "$c"; done
 echo "summary: pass=$PASS fail=$FAIL skip=$SKIP${FAILED:+ failed:$FAILED}"

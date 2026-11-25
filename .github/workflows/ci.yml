@@ -63,8 +63,8 @@ jobs:
         run: |
           vp=../VD-ModuleKit/tooling/vendor-parity.sh
           ep=../VD-ModuleKit/tooling/engine-parity.sh
-          [ -f "$vp" ] && sh "$vp" . || echo "vendor-parity: VD-ModuleKit not beside repo (skip)"
-          [ -f "$ep" ] && sh "$ep" . || echo "engine-parity: VD-ModuleKit not beside repo (skip)"
+          if [ -f "$vp" ]; then sh "$vp" . || exit 1; else echo "vendor-parity: VD-ModuleKit not beside repo (skip)"; fi
+          if [ -f "$ep" ]; then sh "$ep" . || exit 1; else echo "engine-parity: VD-ModuleKit not beside repo (skip)"; fi
           sh .github/scripts/release-workflow-lint.sh . || exit 1
 
       - name: Release preflight (version surfaces, baseline, links, shell parse, bot-author guard)
