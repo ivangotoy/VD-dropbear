@@ -52,7 +52,7 @@ jobs:
         run: |
           for f in module/update.json module/vdlu/baseline.json module/webroot/*.json module/webroot/lang/*.json; do
             [ -e "$f" ] || continue
-            python3 -c "import json,sys; json.load(open('$f'))" && echo "ok $f"
+            python3 -c "import json,sys; json.load(open('$f'))" && echo "ok $f" || exit 1
           done
 
       # Kit guards (STANDARDS §8): vendor-parity (kit tools) + engine-parity (vendored VDLU engine
