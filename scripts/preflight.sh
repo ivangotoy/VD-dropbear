@@ -56,8 +56,9 @@ sys.exit(1 if bad else 0)
 PY
 else info "no module/bin (slim build without committed bins)"; fi
 
-# 3. baseline == what a fresh pack of the current tree would hash (no phantom/stale).
-echo "[3] baseline.json is the signed manifest of the CURRENT tree"
+# 3. baseline.json carries a signature and module.prop's versionCode (the signature itself and the
+#    file hashes are not verified here; scripts/repack-baseline.sh produces and signs it).
+echo "[3] baseline.json signed and at module.prop's versionCode"
 python3 - <<'PY' && ok "baseline signed + version matches module.prop" || bad "baseline unsigned or version drift"
 import json,sys
 d=json.load(open('module/vdlu/baseline.json'))
