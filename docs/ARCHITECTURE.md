@@ -56,6 +56,17 @@ which is what keeps the manager's Action from blocking. Dropbear forks one child
 the children keep that name, so the listener's pid is recorded in `state/daemon.pid` at spawn: a
 restart stops only that pid and open SSH sessions survive it, while the WebUI's **Stop** also ends them.
 
+`setsid` never covered cgroups, and that gap was a real regression: the Action button and the WebUI run
+inside the manager app, so a daemon started from either inherited the app's freezer cgroup
+(`/apps/uid_<uid>/pid_<pid>`). Android's `CachedAppOptimizer` freezes that cgroup once it caches the
+app, and the daemon is frozen with it while still holding its listening socket. TCP connects keep
+completing because the backlog lives in the kernel, but nothing calls `accept()`, so clients hang at
+"Connection established ... Local version string" with no error on either side; `/proc/<pid>/wchan`
+reads `do_freezer_trap` instead of `do_select`. `vddb_escape_freezer` now moves the spawning shell to
+the root cgroup (which the freezer never touches) before the fork, so the daemon inherits the exit. It
+is a no-op at boot (already at `/`) and on platforms without the freezer - do not "simplify" the spawn
+back to a bare `setsid`.
+
 ## The secret store (CE vs DE, BFU vs AFU)
 
 Settings are not secret and live on device-encrypted storage (`/data/adb/vddropbear`), readable at
