@@ -120,9 +120,6 @@ if [ "$verb" = read ]; then
   exit 0
 fi
 
-sed -i "s/^version=.*/version=${NAME}/"       "$PROP"
-sed -i "s/^versionCode=.*/versionCode=${CODE}/" "$PROP"
-
 # update manifest. Preserve the module's own zipUrl + changelog and substitute only the
 # version token, so this bumper stays generic across modules: a flavored
 # "-<ver>-universal-full.zip" and a single-flavor "<module>-<ver>.zip" both survive, with no
@@ -132,6 +129,9 @@ sed -i "s/^versionCode=.*/versionCode=${CODE}/" "$PROP"
 old_zip="$(sed -n 's/.*"zipUrl"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$UJSON" | head -n1)"
 old_cl="$(sed -n 's/.*"changelog"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$UJSON" | head -n1)"
 [ -n "$old_zip" ] || { echo "version.sh: $UJSON has no zipUrl to derive the new one from" >&2; exit 1; }
+# module.prop only after the update.json checks: a failed bump leaves both files as they were
+sed -i "s/^version=.*/version=${NAME}/"       "$PROP"
+sed -i "s/^versionCode=.*/versionCode=${CODE}/" "$PROP"
 new_zip="${old_zip//"$cur_name"/$NAME}"
 # A SUFFIX module whose release zip carries the BARE version (no suffix) will not match cur_name,
 # so this substitution is a no-op and the zipUrl stays stale. Warn loud (non-fatal: don't break releases).
