@@ -200,7 +200,7 @@ encodes the fix; for the record, the pieces are:
    and `getrrsetbyname.c` uses resolver internals bionic doesn't expose. Neither
    is used by `sftp-server` or `scp`.
 5. **`-Wl,--allow-multiple-definition`.** `reallocarray` is the mirror image of
-   the functions in (1): bionic doesn't *declare* it at API 24, so OpenSSH
+   the functions in (1): bionic doesn't *declare* it at API 28, so OpenSSH
    compiles its own compat, but the **symbol** does exist in `libc.a`, so the
    two collide at link time. Allowing the duplicate takes bionic's, which is fine.
 6. **NULL-guarding `pw_gecos` in `pwcopy()`.** bionic's `getpwuid()` returns a
