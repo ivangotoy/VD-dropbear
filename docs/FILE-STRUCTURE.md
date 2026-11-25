@@ -52,7 +52,7 @@ scripts/
   build.sh                  build the daemon for all ABIs
   build-bundles.sh          build sftp-server, scp, rsync for all ABIs
 docs/                       documentation (this folder) + per-language subdirs
-.github/workflows/         ci.yml (lint+preflight), release.yml (tag -> publish), wiki-sync.yml
+.github/workflows/         ci.yml (lint+preflight), release.yml (manual dispatch -> tag + publish), wiki-sync.yml
 UPSTREAM_VERSION            the pinned upstream Dropbear tag
 ```
 
