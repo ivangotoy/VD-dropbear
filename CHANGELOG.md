@@ -52,6 +52,8 @@ module (`module.prop`) and on GitHub Releases.
   before, only `/sys/fs/cgroup/apps/...` was left and the daemon could still be frozen with the manager.
 - Adding a key in the WebUI that is in `authorized_keys` only as a commented-out line adds it, instead of
   answering `ok` and leaving the key unusable.
+- The WebUI no longer shows an Updates tab: it only hosted the VDLU updater panel, which this build leaves out,
+  so the tab was empty.
 
 ## [v1.12] (2026-11-24)
 

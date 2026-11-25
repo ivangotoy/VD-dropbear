@@ -228,7 +228,7 @@ VD Dropbear runs entirely on your device.
 
 Releases published here are built by `.forgejo/module-ci.sh` from this repository merged with upstream. They
 leave out the VDLU updater described above (`vdlu/`, `webroot/vdlu.*` and its install lines in `customize.sh`),
-so the WebUI's Updates tab shows no update controls; updates come through the root manager's update check (`updateJson`
+and the WebUI's Updates tab; updates come through the root manager's update check (`updateJson`
 points at this repository's `.forgejo/update.json`).
 
 ## More KernelSU modules
