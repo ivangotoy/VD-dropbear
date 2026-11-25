@@ -844,12 +844,14 @@ EOF
     [ -e "$W/failed-once" ] || { fail "stub not called"; return 1; }
     [ "$rc" != 0 ] || fail "a failed hash exited 0: $(tr '\n' ' ' < "$W/out")"
 }
-# build_zip <outdir>: the real build() from .forgejo/module-ci.conf, run by bash as module-ci.sh
-# build-user runs it, on a tar copy of the files it reads; the zip lands in <outdir>/module.zip
+# build_zip <outdir> [touch -t stamp]: the real build() from .forgejo/module-ci.conf, run by bash as
+# module-ci.sh build-user runs it, on a tar copy of the files it reads (all given that mtime when a
+# stamp is passed); the zip lands in <outdir>/module.zip
 build_zip() {
-    mkdir -p "$W/src" "$1"
+    rm -rf "$W/src"; mkdir -p "$W/src" "$1"
     (cd "$REPO" && tar -cf - module LICENSE NOTICE THIRD-PARTY-NOTICES.md .forgejo/module-ci.conf \
         .github/scripts/gen-sha256.sh) | (cd "$W/src" && tar -xf -)
+    [ -z "${2:-}" ] || find "$W/src" -exec touch -t "$2" {} +
     (cd "$W/src" && OUT=$1 bash -c '. .forgejo/module-ci.conf; build') > "$W/build.log" 2>&1 \
         || { fail "build(): $(tail -n 2 "$W/build.log" | tr '\n' ' ')"; return 1; }
 }
@@ -874,6 +876,15 @@ t_build_zip_sha256() {
     echo "# changed" >> "$W/flash/common/vddropbear.sh"
     out=$(gate_out "$W/flash"); rc=$?
     [ "$rc" != 0 ] || fail "changed file passed the gate"
+}
+# U-zip: two builds of the same files give the same zip bytes, whatever the files' mtimes, the
+# time of the build or its time zone. Needs bash, python3, zip, unzip (else SKIP).
+t_build_zip_reproducible() {
+    for _t in bash python3 zip unzip; do command -v "$_t" >/dev/null 2>&1 || return 77; done
+    build_zip "$W/out1" || return 1
+    sleep 2
+    (TZ=EST5; export TZ; build_zip "$W/out2" 200001020304.05) || return 1
+    cmp -s "$W/out1/module.zip" "$W/out2/module.zip" || fail "zip bytes differ between two builds of one tree"
 }
 # F12: scripts/build-bundles.sh fetch() must not reuse a partial download as a cached tarball
 t_build_fetch_partial() {
@@ -1154,7 +1165,7 @@ PY
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_add_key_commented t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_bfu_move_failure_reported t_bfu_rename_failure_reported t_bfu_move_odd_names t_bfu_switch_nothing_to_move t_bfu_stale_temp_ignored t_webui_status t_webui_verbs_exit_zero
 t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_freezer_escape t_freezer_escape_not_writable t_freezer_escape_uid_layout t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
-t_service_disabled t_customize t_uninstall t_sha256_gate t_gen_sha256_failure t_build_zip_sha256 t_build_fetch_partial t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_build_kills_build_user t_workflow_builds_dispatched_commit"
+t_service_disabled t_customize t_uninstall t_sha256_gate t_gen_sha256_failure t_build_zip_sha256 t_build_zip_reproducible t_build_fetch_partial t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_build_kills_build_user t_workflow_builds_dispatched_commit"
 
 for c in $CASES; do run_case "$c"; done
 echo "summary: pass=$PASS fail=$FAIL skip=$SKIP${FAILED:+ failed:$FAILED}"
