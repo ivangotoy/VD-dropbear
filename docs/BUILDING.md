@@ -211,7 +211,9 @@ encodes the fix; for the record, the pieces are:
    while SFTP did not.) The build patches `pwcopy()` to coalesce `pw_gecos` to `""`.
 
 Pinned versions live at the top of `scripts/build-bundles.sh`
-(`ZLIB_VERSION`, `RSYNC_VERSION`, `OPENSSH_VERSION`).
+(`ZLIB_VERSION`, `RSYNC_VERSION`, `OPENSSH_VERSION`), next to the sha256 of each source tarball
+(`ZLIB_SHA256`, `RSYNC_SHA256`, `OPENSSH_SHA256`, `OPENSSH_GH_SHA256`): a download with other bytes is
+refused before extraction, so a version change needs its new pin.
 
 ## Reproducing a single ABI by hand
 

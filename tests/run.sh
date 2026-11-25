@@ -927,7 +927,13 @@ t_build_fetch_pinned() {
     ( . "$W/fetch.sh"; fetch https://example.invalid/b.tar.gz "$W/b.tar.gz" "$_h" ) 2>/dev/null && { fail "tampered cached copy accepted"; return 1; }
     printf '#!/bin/sh\nwhile [ "$#" -gt 1 ]; do [ "$1" = -o ] && o=$2; shift; done\nprintf "genuine tarball" > "$o"\n' > "$STUB/curl"
     ( . "$W/fetch.sh"; fetch https://example.invalid/b.tar.gz "$W/b.tar.gz" "$_h" ) || { fail "pinned bytes refused"; return 1; }
-    expect_eq "$(cat "$W/b.tar.gz")" "genuine tarball"
+    expect_eq "$(cat "$W/b.tar.gz")" "genuine tarball" || return 1
+    # one cached file, two accepted pins (the OpenSSH release tarball or its fallback archive): a
+    # cached copy matching the second pin is reused without a download
+    printf '#!/bin/sh\nexit 22\n' > "$STUB/curl"
+    _h2=$(printf 'fallback archive' | sha256sum | cut -d' ' -f1); printf 'fallback archive' > "$W/c.tar.gz"
+    ( . "$W/fetch.sh"; fetch https://example.invalid/c.tar.gz "$W/c.tar.gz" "$_h" "$_h2" ) || { fail "cached copy with the second pin refused"; return 1; }
+    expect_eq "$(cat "$W/c.tar.gz")" "fallback archive"
 }
 
 # F32: module-ci.sh release: cleanup() deletes only a release the forge still reports as a
