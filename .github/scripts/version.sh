@@ -123,8 +123,8 @@ fi
 # update manifest. Preserve the module's own zipUrl + changelog and substitute only the
 # version token, so this bumper stays generic across modules: a flavored
 # "-<ver>-universal-full.zip" and a single-flavor "<module>-<ver>.zip" both survive, with no
-# per-module name baked in. size/sha256/notes are filled by the release workflow once the
-# zip exists (version.sh runs before the build); the in-app update-check verb reads these.
+# per-module name baked in. size/sha256/notes are reset here (version.sh runs before the build);
+# a release workflow may fill them once the zip exists (this repo's release.yml does not).
 [ -f "$UJSON" ] || { echo "version.sh: $UJSON missing; seed update.json with the module's zipUrl once, then bump" >&2; exit 1; }
 old_zip="$(sed -n 's/.*"zipUrl"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$UJSON" | head -n1)"
 old_cl="$(sed -n 's/.*"changelog"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$UJSON" | head -n1)"

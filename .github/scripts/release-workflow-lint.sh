@@ -46,11 +46,11 @@
 #              There are TWO valid seeding paths, and EITHER one satisfies the check:
 #                (a) CI keyless seed -- a seed_baseline() step in the publish workflow runs
 #                    vdlu-pack (keyless) to write vdlu/baseline.json into the staged zip
-#                    (VD-Installer / VD-Backup / dropbear). Detected: a publish workflow
+#                    (VD-Installer / VD-Backup). Detected: a publish workflow
 #                    references baseline.json / seed_baseline.
 #                (b) committed SIGNED baseline -- the module COMMITS module/vdlu/baseline.json
 #                    to the repo, regenerated + SIGNED locally (signing key kept OUT of CI) via
-#                    its release runbook (COPG-VD). This is the STRONGER, deliberate choice (a
+#                    its release runbook (COPG-VD, dropbear). This is the STRONGER, deliberate choice (a
 #                    signed integrity-root baseline; the signing key never touches CI).
 #              FLAG only when module/vdlu/ exists AND a release is published AND NEITHER (a) nor
 #              (b) holds. App-only modules (no module/vdlu/) skip this check silently.
@@ -96,7 +96,8 @@ for wf in "$wfdir"/*.y*ml; do
   # -- does on: carry a human release gate? (workflow_dispatch OR a tag-push trigger) --
   # Scans only the top-level on: block (inline 'on: [..]' or a nested block), so a stray
   # reference elsewhere cannot mask an ungated auto-publish. A tag push counts as the human
-  # decision (STANDARDS 7.1): dropbear/VDGoogle publish on a tag, by design (local signing).
+  # decision (STANDARDS 7.1): VDGoogle publishes on a tag, by design (local signing); dropbear's
+  # release.yml is dispatch-only.
   on_gate=$(awk '
     /^[Oo]n:/ { if ($0 ~ /workflow_dispatch|tags:/) { print "yes"; exit }; inon=1; next }
     inon==1 {
