@@ -38,6 +38,7 @@ module/                     the installable module
   action.sh                 manager Action: (re)launch the daemon
   customize.sh              install-time setup
   uninstall.sh              stop the daemon on removal
+  .vd/sha256-gate.sh        flash-time check of every file against its .sha256 companion
   common/
     vddropbear.sh           core library (config, secret store, daemon, argv)
     vddb-webui.sh           WebUI backend (the verbs the page drives)
@@ -53,6 +54,8 @@ scripts/
   build-bundles.sh          build sftp-server, scp, rsync for all ABIs
 docs/                       documentation (this folder) + per-language subdirs
 .github/workflows/         ci.yml (lint+preflight), release.yml (manual dispatch -> tag + publish), wiki-sync.yml
+.forgejo/                   this fork's release: module-ci.sh + module-ci.conf (build, release, update.json)
+tests/run.sh                this fork's test suite (POSIX sh)
 UPSTREAM_VERSION            the pinned upstream Dropbear tag
 ```
 
@@ -61,6 +64,7 @@ UPSTREAM_VERSION            the pinned upstream Dropbear tag
 ```
 /data/adb/vddropbear/
   config                    the live configuration you (or the WebUI) edit
+  bin/                      links to the bundled scp, rsync, sftp-server for this ABI (made at each start)
   state/daemon.log          the daemon log
   state/daemon.log.1        the previous log (moved there at start once the log passes 1 MiB)
   state/daemon.pid          pid of the listening daemon (sessions are its children)
@@ -72,6 +76,10 @@ UPSTREAM_VERSION            the pinned upstream Dropbear tag
     hostkey_<type>          the host key
     authorized_keys         public keys
     passwd                  password hashes (PBKDF2)
+
+/dev/vddropbear/
+  authorized_keys           link to the secret store's authorized_keys (root-only 0700 dir on tmpfs,
+                            remade at each start; Dropbear checks the key file's parent directories)
 ```
 
 The runtime config and secrets are intentionally kept when you uninstall, so a reinstall keeps your
