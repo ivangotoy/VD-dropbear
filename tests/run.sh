@@ -1,7 +1,8 @@
 #!/bin/sh
 # VD Dropbear module test suite: POSIX sh, no dependencies beyond a POSIX userland
-# (cases that run the WebUI page JS need node, cases that run the fork's build and release
-# code need bash, python3, git, zip and unzip; each is reported as SKIP without them).
+# (cases that run the WebUI page JS need node; cases that run the fork's build and release code,
+# workflow steps or the maintainer scripts need bash, python3, git, zip or unzip, as each case
+# states; a case is reported as SKIP when a tool it needs is missing).
 #   sh tests/run.sh
 # Runs the real module scripts (common/vddropbear.sh, common/vddb-webui.sh, service.sh,
 # action.sh, customize.sh, uninstall.sh) from a copy of module/ under $TMPDIR, against
