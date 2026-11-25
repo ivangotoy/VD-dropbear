@@ -624,6 +624,31 @@ t_slow_start_reported() {
     expect_has "$s" "pid=$(listener)
 "
 }
+# v1.13: a start from inside an app cgroup (manager Action/WebUI) moves the starting shell to the
+# root cgroup before the fork, so the daemon is not frozen with the manager; elsewhere nothing is
+# written; a move that fails is logged, prints nothing and still starts the daemon. The cgroup
+# files sit under the fake root (VDDB_ROOT); the pid comes from the real /proc/self/stat.
+t_freezer_escape() {
+    cfg PORT=2299
+    mkdir -p "$ROOT/sys/fs/cgroup" "$ROOT/proc/self"
+    : > "$ROOT/sys/fs/cgroup/cgroup.procs"
+    echo "0::/apps/uid_10001/pid_4242" > "$ROOT/proc/self/cgroup"
+    sh "$MOD/action.sh" > "$W/out" 2>"$W/err" & a=$!
+    wait "$a"
+    expect_eq "$(cat "$ROOT/sys/fs/cgroup/cgroup.procs")" "$a" || return 1
+    grep -q "moved pid $a from an app cgroup" "$DATA/state/daemon.log" || { fail "move not logged"; return 1; }
+    expect_has "$(cat "$W/out")" "OK, running" || return 1
+    : > "$ROOT/sys/fs/cgroup/cgroup.procs"
+    echo "0::/" > "$ROOT/proc/self/cgroup"
+    sh "$MOD/action.sh" >/dev/null
+    expect_eq "$(cat "$ROOT/sys/fs/cgroup/cgroup.procs")" "" || return 1
+    rm -f "$ROOT/sys/fs/cgroup/cgroup.procs"; mkdir "$ROOT/sys/fs/cgroup/cgroup.procs"
+    echo "0::/apps/uid_10001/pid_4242" > "$ROOT/proc/self/cgroup"
+    out=$(sh "$MOD/action.sh" 2>"$W/err")
+    expect_has "$out" "OK, running" || return 1
+    expect_eq "$(cat "$W/err")" "" || return 1
+    grep -q "freezer escape failed: the daemon stays in /apps/uid_10001/pid_4242" "$DATA/state/daemon.log" || fail "failed move not logged"
+}
 t_disabled_not_started() {
     cfg ENABLED=0
     out=$(sh "$MOD/action.sh")
@@ -1019,7 +1044,7 @@ PY
 
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_bfu_move_failure_reported t_bfu_rename_failure_reported t_webui_status t_webui_verbs_exit_zero
-t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
+t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_freezer_escape t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
 t_service_disabled t_customize t_uninstall t_sha256_gate t_build_zip_sha256 t_build_fetch_partial t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_build_kills_build_user t_workflow_builds_dispatched_commit"
 
 for c in $CASES; do run_case "$c"; done

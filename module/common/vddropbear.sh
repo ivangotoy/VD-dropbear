@@ -368,18 +368,23 @@ vddb_listen_summary() {
 # the daemon at boot (already at /) and wherever the platform has no freezer.
 # The pid must be read by a builtin, in this shell: a command substitution would fork
 # and report the (already dead) subshell's pid instead of ours.
+# A move that fails is logged: that daemon can be frozen with the manager app.
 vddb_own_pid() { read -r VDDB_OWN_PID _ < /proc/self/stat 2>/dev/null; }
 
 vddb_escape_freezer() {
-    [ -w /sys/fs/cgroup/cgroup.procs ] || return 0
-    case "$(sed -n 's/^0:://p' /proc/self/cgroup 2>/dev/null)" in
+    _procs="${VDDB_ROOT:-}/sys/fs/cgroup/cgroup.procs"
+    [ -w "$_procs" ] || return 0
+    _cg="$(sed -n 's/^0:://p' "${VDDB_ROOT:-}/proc/self/cgroup" 2>/dev/null)"
+    case "$_cg" in
         /apps/*) ;;
         *) return 0 ;;
     esac
-    vddb_own_pid || return 1
-    [ -n "$VDDB_OWN_PID" ] || return 1
-    echo "$VDDB_OWN_PID" > /sys/fs/cgroup/cgroup.procs 2>/dev/null || return 1
-    vddb_log "moved pid $VDDB_OWN_PID from an app cgroup to / (freezer escape)"
+    if vddb_own_pid && [ -n "$VDDB_OWN_PID" ] && { echo "$VDDB_OWN_PID" > "$_procs"; } 2>/dev/null; then
+        vddb_log "moved pid $VDDB_OWN_PID from an app cgroup to / (freezer escape)"
+        return 0
+    fi
+    vddb_log "freezer escape failed: the daemon stays in $_cg and can be frozen with the manager app"
+    return 1
 }
 
 # Launch the single daemon in its own session (so the KSU manager's action.sh does
