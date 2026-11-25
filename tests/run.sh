@@ -226,6 +226,16 @@ t_webui_keys() {
     expect_eq "$(head -n1 "$CE/authorized_keys")" "$k2" || return 1
     out=$(webui del-key 'x;y'); expect_eq "$out" "err: bad index"
 }
+# F2: a key present only as a commented-out line is added again (it does not authenticate as a comment)
+t_webui_add_key_commented() {
+    k="ssh-ed25519 AAAAexample4 four@example"
+    mkdir -p "$CE"; printf '# %s\n' "$k" > "$CE/authorized_keys"
+    expect_eq "$(webui_in "$k" add-key)" ok || return 1
+    expect_eq "$(grep -cxF "$k" "$CE/authorized_keys")" 1 || return 1
+    expect_eq "$(webui list-keys | cut -f2 | base64 -d)" "$k" || return 1
+    expect_eq "$(webui_in "$k" add-key)" ok || return 1
+    expect_eq "$(grep -cxF "$k" "$CE/authorized_keys")" 1
+}
 t_webui_passwords() {
     spec='pbkdf2-sha256$600000$00112233445566778899aabbccddeeff$0011223344556677889900112233445566778899001122334455667788990011'
     expect_eq "$(webui_in "$spec" set-pw root)" ok || return 1
@@ -1126,7 +1136,7 @@ PY
 }
 
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
-t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_bfu_move_failure_reported t_bfu_rename_failure_reported t_bfu_move_odd_names t_bfu_switch_nothing_to_move t_bfu_stale_temp_ignored t_webui_status t_webui_verbs_exit_zero
+t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_add_key_commented t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_bfu_move_failure_reported t_bfu_rename_failure_reported t_bfu_move_odd_names t_bfu_switch_nothing_to_move t_bfu_stale_temp_ignored t_webui_status t_webui_verbs_exit_zero
 t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_freezer_escape t_freezer_escape_not_writable t_freezer_escape_uid_layout t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
 t_service_disabled t_customize t_uninstall t_sha256_gate t_build_zip_sha256 t_build_fetch_partial t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_build_kills_build_user t_workflow_builds_dispatched_commit"
 

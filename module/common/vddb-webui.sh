@@ -187,8 +187,8 @@ case "$1" in
       ssh-ed25519\ *|ssh-rsa\ *|ecdsa-sha2-*\ *|sk-ssh-*\ *|sk-ecdsa-*\ *) : ;;
       *) die "not a public key" ;;
     esac
-    # no duplicates
-    if [ -f "$_f" ] && grep -qF "$_key" "$_f" 2>/dev/null; then echo "ok"; exit 0; fi
+    # no duplicates; a commented-out line is not a key (list-keys skips it too)
+    if [ -f "$_f" ] && grep -v '^#' "$_f" 2>/dev/null | grep -qF "$_key"; then echo "ok"; exit 0; fi
     # a hand-edited file may lack the final newline: end that line first
     if [ -s "$_f" ] && [ -n "$(tail -c 1 "$_f")" ]; then echo >> "$_f" || die "append failed"; fi
     printf '%s\n' "$_key" >> "$_f" || die "append failed"

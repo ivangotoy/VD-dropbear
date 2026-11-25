@@ -50,6 +50,8 @@ module (`module.prop`) and on GitHub Releases.
 - A start from the manager app also leaves the app's cgroup on Android 12-14 (and on later builds without
   app/system cgroup isolation), where the app sits in `/sys/fs/cgroup/uid_<n>/pid_<m>` with no `apps/` prefix;
   before, only `/sys/fs/cgroup/apps/...` was left and the daemon could still be frozen with the manager.
+- Adding a key in the WebUI that is in `authorized_keys` only as a commented-out line adds it, instead of
+  answering `ok` and leaving the key unusable.
 
 ## [v1.12] (2026-11-24)
 
