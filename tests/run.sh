@@ -1325,6 +1325,9 @@ t_gen_update_json_checks() {
     printf 'version=v1.13\n' > "$_g/module/module.prop"
     sh "$_g/tools/gen-update-json.sh" > "$W/out" 2>&1 && { fail "no versionCode exited 0"; return 1; }
     [ -e "$_g/module/update.json" ] && { fail "update.json written"; return 1; }
+    printf 'versionCode=10013\n' > "$_g/module/module.prop"
+    sh "$_g/tools/gen-update-json.sh" > "$W/out" 2>&1 && { fail "no version exited 0"; return 1; }
+    [ -e "$_g/module/update.json" ] && { fail "update.json written without a version"; return 1; }
     printf 'version=v1.13\nversionCode=10013\n' > "$_g/module/module.prop"
     sh "$_g/tools/gen-update-json.sh" > "$W/out" 2>&1 || { fail "good module.prop failed"; return 1; }
     expect_eq "$(python3 -I -c 'import json,sys;print(json.load(open(sys.argv[1]))["versionCode"])' "$_g/module/update.json")" 10013
