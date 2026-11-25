@@ -33,8 +33,9 @@
 # (and this tool skips *.sha256, so no recursion).
 # Each companion holds `sha256sum <basename>` output, so `sha256sum -c <basename>.sha256` verifies it.
 # Redundant with the VDLU baseline.json by design (owner's call): an extra, human-checkable fail-safe.
-# The flash gate is MANDATORY and ABORTS: customize.sh sources tooling/sha256-gate.sh, which runs this
-# tool's --check on-device and aborts the flash on any mismatch (a corrupted or truncated zip). Note:
+# The flash gate is MANDATORY and ABORTS: customize.sh sources .vd/sha256-gate.sh, which runs its own
+# `sha256sum -c` over every companion on-device and aborts the flash on any mismatch (a corrupted or
+# truncated zip); this tool's --check is the same check for a build host. Note:
 # in-zip hashes catch accidental corruption, not tampering (an attacker edits the file AND its .sha256)
 # - signed integrity stays the VDLU manifest's job.
 # Usage: gen-sha256.sh [--check] <payload-dir> [...]
