@@ -54,6 +54,5 @@
 #define DROPBEAR_SFTPSERVER 1
 #define SFTPSERVER_PATH "/data/adb/vddropbear/bin/sftp-server"
 
-/* openpty() is forced on at build time (build.sh / CI) because the
- * cross-compile configure cannot probe the Android target for it; bionic
- * provides openpty() from API 23. Without it, interactive PTY sessions fail. */
+/* openpty() needs nothing here: Dropbear's cross-configure finds it in bionic
+ * (<pty.h>, HAVE_OPENPTY), which provides it from API 23; build.sh builds at 24. */

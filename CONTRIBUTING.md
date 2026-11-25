@@ -55,8 +55,8 @@ scripts/build.sh            # fetches the tracked upstream, applies patches, bui
 ```
 
 The patch set is intentionally minimal and auditable: a neutral/configurable identity string,
-config-driven paths for `authorized_keys` and the password file, the Android `openpty` fix, and runtime
-configuration. Please keep new patches small, documented, and justified in the PR.
+config-driven paths for `authorized_keys` and the password file, and build-time options in
+`localoptions.h`. Please keep new patches small, documented, and justified in the PR.
 
 ## Pull requests
 
