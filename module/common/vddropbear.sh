@@ -372,16 +372,18 @@ vddb_listen_summary() {
 # --- freezer isolation -----------------------------------------------------
 # Android's CachedAppOptimizer freezes a cached app together with every process left
 # in the app's cgroup. The manager's Action button and the WebUI both run inside the
-# manager app, so a daemon (re)started from either inherits
-# /sys/fs/cgroup/apps/uid_<manager-uid>/pid_<manager-pid> and is frozen with it a
-# minute later. A frozen dropbear still owns its listening socket (the backlog lives
+# manager app, so a daemon (re)started from either inherits the manager's process group
+# (/sys/fs/cgroup/apps/uid_<manager-uid>/pid_<manager-pid>, or /sys/fs/cgroup/uid_<uid>/pid_<pid>
+# on Android 12-14 and on later builds without app/system cgroup isolation) and is frozen
+# with it a minute later. A frozen dropbear still owns its listening socket (the backlog lives
 # in the kernel): TCP connects keep completing, but the process never accept()s them
 # and never sends its identification banner, so clients hang forever at
 # "Connection established ... Local version string" with no timeout of their own.
 # /proc/<pid>/wchan then reads do_freezer_trap instead of do_select.
 # setsid() detaches the session, not the cgroup - hence this step.
-# The root cgroup is exempt from the freezer, so leave any /apps/* group before the
-# daemon is forked and let the daemon inherit the exit. No-op when service.sh starts
+# The root cgroup is exempt from the freezer, so leave an app's group (any /apps/* group,
+# or /uid_<uid>/pid_<pid> with an app uid, >= 10000) before the daemon is forked and let the
+# daemon inherit the exit. No-op when service.sh starts
 # the daemon at boot (already at /) and wherever the platform has no freezer.
 # The pid must be read by a builtin, in this shell: a command substitution would fork
 # and report the (already dead) subshell's pid instead of ours.
@@ -392,6 +394,10 @@ vddb_escape_freezer() {
     _cg="$(sed -n 's/^0:://p' "${VDDB_ROOT:-}/proc/self/cgroup" 2>/dev/null)"
     case "$_cg" in
         /apps/*) ;;
+        /uid_*/pid_*)
+            _u="${_cg#/uid_}"; _u="${_u%%/*}"
+            case "$_u" in ''|*[!0-9]*) return 0 ;; esac
+            [ "$_u" -ge 10000 ] || return 0 ;;
         *) return 0 ;;
     esac
     _procs="${VDDB_ROOT:-}/sys/fs/cgroup/cgroup.procs"

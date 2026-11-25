@@ -706,6 +706,32 @@ t_freezer_escape_not_writable() {
     expect_eq "$out" "rc=0" || return 1
     expect_eq "$(cat "$DATA/state/daemon.log")" ""
 }
+# U-cgroup: Android 12-14 (and later builds without app/system cgroup isolation) keep an app at
+# /uid_<uid>/pid_<pid>, no /apps prefix: a start from there escapes too; the groups of uids below
+# 10000 (init services, /system/uid_<n> system apps) are left alone
+esc_out() { MODDIR=$MOD sh -c '. "$MODDIR/common/vddropbear.sh"; vddb_escape_freezer; echo "rc=$? pid=$$"' 2>&1; }
+t_freezer_escape_uid_layout() {
+    mkdir -p "$ROOT/sys/fs/cgroup" "$ROOT/proc/self" "$DATA/state"
+    : > "$ROOT/sys/fs/cgroup/cgroup.procs"
+    echo "0::/uid_10001/pid_4242" > "$ROOT/proc/self/cgroup"
+    out=$(esc_out)
+    expect_eq "rc=0 pid=$(cat "$ROOT/sys/fs/cgroup/cgroup.procs")" "$out" || return 1
+    expect_has "$out" "rc=0 pid=" || return 1
+    grep -q "moved pid ${out#rc=0 pid=} from an app cgroup" "$DATA/state/daemon.log" || { fail "move not logged"; return 1; }
+    for _g in /uid_0/pid_77 /uid_1000/pid_77 /system/uid_1000/pid_77 /uid_x/pid_77; do
+        : > "$ROOT/sys/fs/cgroup/cgroup.procs"; : > "$DATA/state/daemon.log"
+        echo "0::$_g" > "$ROOT/proc/self/cgroup"
+        out=$(esc_out)
+        expect_has "$out" "rc=0" || return 1
+        expect_eq "$(cat "$ROOT/sys/fs/cgroup/cgroup.procs")$(cat "$DATA/state/daemon.log")" "" || { fail "($_g) escaped"; return 1; }
+    done
+    [ "$(id -u)" = 0 ] && return 0
+    : > "$ROOT/sys/fs/cgroup/cgroup.procs"; chmod 444 "$ROOT/sys/fs/cgroup/cgroup.procs"
+    echo "0::/uid_10001/pid_4242" > "$ROOT/proc/self/cgroup"
+    out=$(esc_out)
+    expect_has "$out" "rc=1" || return 1
+    grep -q "freezer escape failed: the daemon stays in /uid_10001/pid_4242" "$DATA/state/daemon.log" || fail "failed escape not logged"
+}
 t_disabled_not_started() {
     cfg ENABLED=0
     out=$(sh "$MOD/action.sh")
@@ -1101,7 +1127,7 @@ PY
 
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_bfu_move_failure_reported t_bfu_rename_failure_reported t_bfu_move_odd_names t_bfu_switch_nothing_to_move t_bfu_stale_temp_ignored t_webui_status t_webui_verbs_exit_zero
-t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_freezer_escape t_freezer_escape_not_writable t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
+t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_freezer_escape t_freezer_escape_not_writable t_freezer_escape_uid_layout t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
 t_service_disabled t_customize t_uninstall t_sha256_gate t_build_zip_sha256 t_build_fetch_partial t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_build_kills_build_user t_workflow_builds_dispatched_commit"
 
 for c in $CASES; do run_case "$c"; done

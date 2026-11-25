@@ -47,6 +47,9 @@ module (`module.prop`) and on GitHub Releases.
   secret cannot be renamed into the other store, instead of answering `ok` with the secret left in the old one.
 - A start that cannot leave the manager app's cgroup logs it in `daemon.log` instead of failing silently, and
   no longer prints a shell error in the Action output.
+- A start from the manager app also leaves the app's cgroup on Android 12-14 (and on later builds without
+  app/system cgroup isolation), where the app sits in `/sys/fs/cgroup/uid_<n>/pid_<m>` with no `apps/` prefix;
+  before, only `/sys/fs/cgroup/apps/...` was left and the daemon could still be frozen with the manager.
 
 ## [v1.12] (2026-11-24)
 
