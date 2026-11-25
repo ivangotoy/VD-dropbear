@@ -54,7 +54,7 @@ configuration and credentials. Please:
 ## Supported versions
 
 Security fixes land on the latest release. The server binary tracks upstream Dropbear; upstream
-security releases are rebuilt and shipped as soon as the CI picks them up.
+security releases are rebuilt locally (`scripts/build.sh`) and shipped in the next release.
 
 ## Reporting a vulnerability
 

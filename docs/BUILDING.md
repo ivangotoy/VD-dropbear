@@ -31,7 +31,7 @@
 
 VD Dropbear ships **upstream [Dropbear](https://github.com/mkj/dropbear)** (the tag pinned in
 [`UPSTREAM_VERSION`](../UPSTREAM_VERSION)) plus the small, auditable patch set in
-[`patches/`](../patches/). CI builds it; you can reproduce it locally.
+[`patches/`](../patches/). The binaries are built locally and committed; CI only checks them (see below).
 
 ## Quick start
 
@@ -170,7 +170,7 @@ not depend on it anyway.)
 ## Bundled tools: sftp-server, scp, rsync
 
 `scripts/build-bundles.sh` cross-compiles the file-transfer tools as dynamic
-binaries into `module/bin/<abi>/`. CI runs it right after `build.sh`.
+binaries into `module/bin/<abi>/`. Run it right after `build.sh`.
 
 - **rsync** (with bundled popt + zlib) builds cleanly once you tell its configure
   that bionic has no `lutimes` (`ac_cv_func_lutimes=no`).
