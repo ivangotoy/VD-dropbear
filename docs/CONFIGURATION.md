@@ -85,6 +85,7 @@ A login runs as the account you authenticate as: **root** by default, or a lower
 | `LOGIN_SHELL` | `""` | Shell for the session. Empty uses the account default. |
 | `HOME_DIR` | `""` | `HOME` for the session. Empty uses the module directory. |
 | `EXTRA_ENV` | `""` | Extra environment, `K=V;K2=V2`. |
+| `PASS_ENV` | `1` | Pass the daemon's environment (the platform variables it was started with, such as `BOOTCLASSPATH`) on to login sessions (Dropbear `-e`). Tools run over SSH that call into the Android framework (`am`, `content`, `pm`) need it. `0` gives sessions a bare login environment. |
 | `IDLE_TIMEOUT` | `0` | Disconnect after N idle seconds. `0` disables. |
 | `KEEPALIVE` | `0` | Send a keepalive every N seconds. `0` disables. |
 | `RECEIVE_WINDOW` | `""` | Dropbear receive window size. Empty uses the default. |
