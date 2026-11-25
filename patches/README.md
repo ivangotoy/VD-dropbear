@@ -28,7 +28,8 @@
 VD Dropbear ships **upstream [Dropbear](https://github.com/mkj/dropbear)** (pinned in
 [`../UPSTREAM_VERSION`](../UPSTREAM_VERSION)) with the small, auditable patches below. The goal is to
 keep changes to the SSH server minimal, reviewable, and easy to re-apply when upstream moves; the
-build (`scripts/build.sh` and the CI workflow) applies every `*.patch` here plus `localoptions.h`.
+build (`scripts/build.sh`, run by hand; the release workflows package the committed binaries and do
+not rebuild Dropbear) applies every `*.patch` here plus `localoptions.h`.
 
 Everything specific to *your* device (port, keys, password, paths) is runtime configuration, never a
 patch; these patches only make the server **able** to be configured on Android.
