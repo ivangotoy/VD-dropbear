@@ -85,9 +85,10 @@ globally-readable "I am being debugged" flag that anything on the device can rea
   Dropbear replaces it with an uninformative one so scanners cannot fingerprint the exact server or
   version and aim known-version attacks at it.
 - **Secrets stored sensibly** (see [Security model](#security-model)).
-- **Bring your own credentials.** Add authorized keys and password accounts. A login runs as the
-  account you authenticate as: **root** by default, or a lower-privilege Android account (`shell`,
-  `system`). The WebUI enforces a minimum password strength and never stores a password in clear text.
+- **Bring your own credentials.** Add authorized keys and password accounts. A key logs in as **root**
+  only; a password account is for **root** or a lower-privilege Android account (`shell`, `system`) and
+  logs in as that account. The WebUI enforces a minimum password strength and never stores a password
+  in clear text.
 - **File transfer and sync built in.** The bundle ships `sftp-server`, `scp` and `rsync`, so SFTP,
   sshfs, GUI clients and backups all work over the same connection.
 - **SSH over USB, no ADB.** Turn on USB tethering and bind the daemon to the USB address: the same session over the cable, faster and steadier than wifi for large transfers.
@@ -110,12 +111,13 @@ Because the project is built to be **AI-friendly**, with a documented configurat
 runtime [env contract](patches/README.md), predictable paths and plain-text status, an agent can
 discover how to use it without guesswork.
 
-> **Root by default, so treat it like root.** A default login lands as root, and you can also log in
-> as a lower-privilege account (`shell`, `system`); see the warning below. When you hand access to an
-> agent, give it its own credential (not your personal key), point it at a lower-privilege account like
-> `shell` if you want to limit its reach, scope the
-> binds to the networks you trust (loopback or a VPN rather than the open internet), keep password
-> auth off, and remember you can revoke a key or stop the daemon at any time from the WebUI.
+> **Root by default, so treat it like root.** A default login lands as root. Keys log in as root only
+> (the key file sits in root-only storage, and Dropbear opens it as the account logging in); a
+> lower-privilege account (`shell`, `system`) needs a password account; see the warning below. When you
+> hand access to an agent, give it its own credential (not your personal key); to limit its reach to
+> `shell`, that credential has to be a `shell` password account, otherwise keep password auth off. Scope
+> the binds to the networks you trust (loopback or a VPN rather than the open internet), and remember
+> you can revoke a key or stop the daemon at any time from the WebUI.
 
 ## Install
 

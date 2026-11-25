@@ -61,7 +61,7 @@ discover how to use it without guesswork.
 
 This is root, so treat it like root:
 
-- give the agent its **own credential**, not your personal one, and point it at a lower-privilege account (`shell`) if you want to limit its reach;
+- give the agent its **own credential**, not your personal one. A key logs in as root only (the key file sits in root-only storage, and Dropbear opens it as the account logging in); to limit the agent to a lower-privilege account (`shell`), give it a password account for `shell` instead;
 - scope the binds to networks you trust: loopback or a VPN rather than the open Internet
   (see [Configuration](CONFIGURATION.md));
 - keep password auth off; a key is revocable and never typed;

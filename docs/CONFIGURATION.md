@@ -70,7 +70,7 @@ loopback rather than every interface.
 
 ## Authentication
 
-A login runs as the account you authenticate as: **root** by default, or a lower-privilege account (`shell`, `system`). Keys are the default; passwords are opt-in.
+A login runs as the account you authenticate as. Keys log in as **root** only: the authorized keys sit in root-only storage, which Dropbear opens as the account logging in, so a key never logs in as another account. A lower-privilege account (`shell`, `system`) logs in with a password account. Keys are the default; passwords are opt-in.
 
 | Key | Default | Meaning |
 |-----|---------|---------|
