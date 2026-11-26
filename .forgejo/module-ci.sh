@@ -206,6 +206,16 @@ v = json.load(sys.stdin)["versionCode"]
 sys.exit(1) if type(v) is not int or v < 0 else print(v)')" \
         || die "$UPDATE_JSON_PATH at $MAIN_SHA has no integer versionCode"
 fi
+# a release published by a run that failed before its update.json commit is not on main: the newest
+# published release on the forge counts too (its body records "versionCode N"; unreadable = stop)
+PUB_VC="$(api GET "/releases?draft=false&pre-release=false&limit=1" | python3 -I -c 'import json, re, sys
+rs = json.load(sys.stdin)
+if not rs:
+    print(0); sys.exit(0)
+m = re.search(r"^versionCode ([0-9]+)$", rs[0].get("body") or "", re.M)
+sys.exit(1) if not m else print(m.group(1))')" \
+    || die "the newest published release on the forge records no versionCode (or the release list is unreadable): nothing published"
+[ "$PUB_VC" -le "$LAST_VC" ] || LAST_VC=$PUB_VC
 [ "$VC" -gt "$LAST_VC" ] || VC=$((LAST_VC + 1))
 [ "$VC" -ge "$VERSION_CODE_FLOOR" ] || die "versionCode $VC is below the floor $VERSION_CODE_FLOOR"
 TAG="$(printf '%s' "$VERSION" | sed -E 's/[^A-Za-z0-9._-]+/-/g; s/-+/-/g; s/^-//; s/-$//')"
