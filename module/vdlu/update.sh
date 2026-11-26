@@ -164,7 +164,9 @@ acquire_lock_try() {   # non-blocking: 0 = acquired, 1 = busy (NO exit). The pat
 }
 acquire_lock() { acquire_lock_try || { echo "VDLU: busy (another run holds the lock)" >&2; exit 4; } }
 release_lock() {
-	[ -n "$LOCKDIR" ] && rm -rf "$LOCKDIR" 2>/dev/null
+	# a cancel request is for the run holding the lock: one that arrived after its last safe point (or
+	# with nothing running) must not cancel the next run at its first file
+	[ -n "$LOCKDIR" ] && rm -rf "$LOCKDIR" "$CANCEL" 2>/dev/null
 	LOCKDIR=""
 }
 
