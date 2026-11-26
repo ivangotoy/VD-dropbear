@@ -81,11 +81,13 @@ init_tools() {
 	fi
 	CACERT=$(cfg ca_cert "")
 	if [ -z "$CACERT" ]; then
+		# built in a temp file and renamed: every invocation (check/run/boot, before any lock) rebuilds it,
+		# and an in-place rewrite truncated the bundle under a concurrent run's curl (rc 77)
 		_cab="$VDLU_DIR/.ca-bundle.pem"
 		for _d in /apex/com.android.conscrypt/cacerts /system/etc/security/cacerts /etc/security/cacerts; do
 			[ -d "$_d" ] && cat "$_d"/* 2>/dev/null
-		done > "$_cab" 2>/dev/null
-		if [ -s "$_cab" ]; then CACERT="$_cab"; else rm -f "$_cab"; fi
+		done > "$_cab.$$" 2>/dev/null
+		if [ -s "$_cab.$$" ] && mv -f "$_cab.$$" "$_cab" 2>/dev/null; then CACERT="$_cab"; else rm -f "$_cab.$$" "$_cab"; fi
 	fi
 	# Diagnostic (VD-Modules#1): log the resolved TLS trust + cert count, so a boot-time curl rc 77
 	# (empty store -> curl falls back to a baked-in CA path) is self-explaining in boot.log instead of a
