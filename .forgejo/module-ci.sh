@@ -180,6 +180,16 @@ BUILT_VC="$(prop_get versionCode "$REL/built.prop")"
 case "$BUILT_VC" in ''|*[!0-9]*) die "built versionCode '$BUILT_VC' is not a number" ;; esac
 VERSION="$(printf '%s' "$BUILT_VERSION" | sed -E 's/-(fork|ci)[0-9]+$//')-ci$RUN_NUMBER"
 VC=$((BUILT_VC + VERSION_CODE_OFFSET))
+# a release never reuses or lowers the published versionCode (managers and VDLU's hardened profile
+# refuse a lower one): the update.json main holds at the base commit names the last published release
+LAST_VC=0
+if git cat-file -e "$BASE_SHA:$UPDATE_JSON_PATH" 2>/dev/null; then
+    LAST_VC="$(git show "$BASE_SHA:$UPDATE_JSON_PATH" | python3 -I -c 'import json, sys
+v = json.load(sys.stdin)["versionCode"]
+sys.exit(1) if type(v) is not int or v < 0 else print(v)')" \
+        || die "$UPDATE_JSON_PATH at $BASE_SHA has no integer versionCode"
+fi
+[ "$VC" -gt "$LAST_VC" ] || VC=$((LAST_VC + 1))
 [ "$VC" -ge "$VERSION_CODE_FLOOR" ] || die "versionCode $VC is below the floor $VERSION_CODE_FLOOR"
 TAG="$(printf '%s' "$VERSION" | sed -E 's/[^A-Za-z0-9._-]+/-/g; s/-+/-/g; s/^-//; s/-$//')"
 case "$TAG" in v*) ;; *) TAG="v$TAG" ;; esac

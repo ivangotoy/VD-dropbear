@@ -1283,7 +1283,8 @@ EOF
 # and the raw update.json. Nothing is fetched from upstream (the source sha is the base sha).
 # release_run <name>: runs the release step in $W/<name>; env knobs for the stub: PATCH_RC (exit
 # of the publish PATCH after the forge applied it), ANON_OK_AT / POLL_OK_AT (attempt that first
-# succeeds), REJECT_PUSH=1 (the forge refuses pushes once seeded). Sets RR (rc), RD (run dir).
+# succeeds), REJECT_PUSH=1 (the forge refuses pushes once seeded), SEED_UPDATE_JSON (the
+# .forgejo/update.json main holds at the base commit). Sets RR (rc), RD (run dir).
 release_setup() {
     for _t in bash python3 git zip unzip; do command -v "$_t" >/dev/null 2>&1 || return 77; done
     build_zip "$W/out" || return 1
@@ -1300,6 +1301,7 @@ release_run() {
     mkdir -p "$RD/forge/owner" "$RD/seed/.forgejo" "$RD/work/.ci-out" "$RD/job" "$RD/bin" "$RD/tmp" "$F"
     git init -q --bare "$RD/forge/owner/repo.git" && git init -q "$RD/seed" || { fail "fixture repos"; return 1; }
     cp "$REPO/.forgejo/module-ci.conf" "$RD/seed/.forgejo/"; echo "# changes" > "$RD/seed/CHANGELOG.md"
+    [ -z "${SEED_UPDATE_JSON:-}" ] || printf '%s\n' "$SEED_UPDATE_JSON" > "$RD/seed/.forgejo/update.json"
     (cd "$RD/seed" && git add -A && git -c user.name=t -c user.email=t@example.invalid commit -qm seed \
         && git push -q "$RD/forge/owner/repo.git" HEAD:refs/heads/main) || { fail "fixture push"; return 1; }
     _base=$(git -C "$RD/seed" rev-parse HEAD)
@@ -1396,6 +1398,26 @@ t_release_failure_after_publish() {
     expect_not "$o" "content below"
 }
 
+# G6: the release's versionCode is above the one main's update.json published at the base commit:
+# with that at the built versionCode + offset (a rerun of the same upstream version) it is one more;
+# without it, the built + offset; an update.json whose versionCode is not an integer, or that is
+# not JSON, stops the run before anything is published.
+t_release_version_code_above_published() {
+    release_setup || return $?
+    SEED_UPDATE_JSON="{\"version\": \"v0-ci1\", \"versionCode\": $RVC}" release_run same || return 1
+    expect_eq "$RR" 0 || { fail "$(tail -n 3 "$RD/out.log" | tr '\n' ' ')"; return 1; }
+    expect_has "$(git --git-dir="$RD/forge/owner/repo.git" show main:.forgejo/update.json)" "\"versionCode\": $((RVC + 1))," || return 1
+    expect_eq "$(unzip -p "$F/asset.zip" module.prop | sed -n 's/^versionCode=//p')" "$((RVC + 1))" || return 1
+    SEED_UPDATE_JSON='{"version": "v0-ci1", "versionCode": 1}' release_run low || return 1
+    expect_has "$(git --git-dir="$RD/forge/owner/repo.git" show main:.forgejo/update.json)" "\"versionCode\": $RVC," || return 1
+    for _j in '{"versionCode": "10018"}' '{"versionCode": 10018.0}' '{"versionCode": true}' 'versionCode=10018'; do
+        SEED_UPDATE_JSON=$_j release_run bad || return 1
+        [ "$RR" != 0 ] || { fail "[$_j] exit 0"; return 1; }
+        grep -q 'has no integer versionCode' "$RD/out.log" || { fail "[$_j] $(tail -n 2 "$RD/out.log" | tr '\n' ' ')"; return 1; }
+        grep -q '^POST ' "$F/calls" 2>/dev/null && { fail "[$_j] a release was created"; return 1; }
+    done
+    return 0
+}
 # module-ci.sh build: whatever the build user started is killed after the build, failed or not.
 # setpriv and chown are stubs: the stub records a kill and never runs it (here the test user may
 # well be the build uid, and `kill -9 -1` would end this session). Needs bash and git (else SKIP).
@@ -1643,7 +1665,7 @@ PY
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_add_key_commented t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_bfu_move_failure_reported t_bfu_rename_failure_reported t_bfu_move_odd_names t_bfu_switch_nothing_to_move t_bfu_stale_temp_ignored t_webui_status t_webui_verbs_exit_zero
 t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_freezer_escape t_freezer_escape_not_writable t_freezer_escape_uid_layout t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
-t_service_disabled t_customize t_uninstall t_sha256_gate t_gen_sha256_failure t_build_zip_sha256 t_build_zip_reproducible t_build_zip_vdlu_shipped t_customize_vdlu_migrates t_vdlu_engine_applies_feed t_vdlu_engine_signed_feed t_vdlu_sig_cut_injection t_vdlu_ca_bundle_replaced t_vdlu_lock_fresh_not_stolen t_vdlu_diff_failure_journal t_vdlu_pruned_target_recovers t_vdlu_fetched_target_applies_offline t_vdlu_stale_cancel_cleared t_build_fetch_partial t_build_fetch_pinned t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_build_kills_build_user t_workflow_builds_dispatched_commit t_ci_validate_json t_ci_parity_failure t_preflight_docnav_count t_preflight_release_pat t_repack_baseline_modes t_version_bump_atomic t_gen_update_json_checks t_wiki_sync_paths"
+t_service_disabled t_customize t_uninstall t_sha256_gate t_gen_sha256_failure t_build_zip_sha256 t_build_zip_reproducible t_build_zip_vdlu_shipped t_customize_vdlu_migrates t_vdlu_engine_applies_feed t_vdlu_engine_signed_feed t_vdlu_sig_cut_injection t_vdlu_ca_bundle_replaced t_vdlu_lock_fresh_not_stolen t_vdlu_diff_failure_journal t_vdlu_pruned_target_recovers t_vdlu_fetched_target_applies_offline t_vdlu_stale_cancel_cleared t_build_fetch_partial t_build_fetch_pinned t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_release_version_code_above_published t_build_kills_build_user t_workflow_builds_dispatched_commit t_ci_validate_json t_ci_parity_failure t_preflight_docnav_count t_preflight_release_pat t_repack_baseline_modes t_version_bump_atomic t_gen_update_json_checks t_wiki_sync_paths"
 
 for c in $CASES; do run_case "$c"; done
 echo "summary: pass=$PASS fail=$FAIL skip=$SKIP${FAILED:+ failed:$FAILED}"
