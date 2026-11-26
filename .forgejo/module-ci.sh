@@ -162,6 +162,9 @@ git_auth clone -q --branch main "$SERVER_URL/$REPOSITORY.git" "$REL/repo"
 cd "$REL/repo"
 git cat-file -e "$BASE_SHA^{commit}" && git merge-base --is-ancestor "$BASE_SHA" HEAD || die "base $BASE_SHA not in main"
 git show "$BASE_SHA:.forgejo/module-ci.conf" > "$REL/module-ci.conf"
+# main's tip in this clone (BASE_SHA or later): what was last published there, update.json and the
+# VDLU feed, is read from it, since main may have moved on since the dispatched commit
+MAIN_SHA="$(git rev-parse HEAD)"
 load_conf "$REL/module-ci.conf"
 if [ -n "$VDLU_FEED_PATH" ]; then
     [[ "$VDLU_KEY_ID" =~ ^[A-Za-z0-9._-]+$ ]] || die "VDLU_FEED_PATH needs VDLU_KEY_ID in module-ci.conf"
@@ -195,13 +198,13 @@ case "$BUILT_VC" in ''|*[!0-9]*) die "built versionCode '$BUILT_VC' is not a num
 VERSION="$(printf '%s' "$BUILT_VERSION" | sed -E 's/-(fork|ci)[0-9]+$//')-ci$RUN_NUMBER"
 VC=$((BUILT_VC + VERSION_CODE_OFFSET))
 # a release never reuses or lowers the published versionCode (managers and VDLU's hardened profile
-# refuse a lower one): the update.json main holds at the base commit names the last published release
+# refuse a lower one): the update.json on main's tip names the last release committed there
 LAST_VC=0
-if git cat-file -e "$BASE_SHA:$UPDATE_JSON_PATH" 2>/dev/null; then
-    LAST_VC="$(git show "$BASE_SHA:$UPDATE_JSON_PATH" | python3 -I -c 'import json, sys
+if git cat-file -e "$MAIN_SHA:$UPDATE_JSON_PATH" 2>/dev/null; then
+    LAST_VC="$(git show "$MAIN_SHA:$UPDATE_JSON_PATH" | python3 -I -c 'import json, sys
 v = json.load(sys.stdin)["versionCode"]
 sys.exit(1) if type(v) is not int or v < 0 else print(v)')" \
-        || die "$UPDATE_JSON_PATH at $BASE_SHA has no integer versionCode"
+        || die "$UPDATE_JSON_PATH at $MAIN_SHA has no integer versionCode"
 fi
 [ "$VC" -gt "$LAST_VC" ] || VC=$((LAST_VC + 1))
 [ "$VC" -ge "$VERSION_CODE_FLOOR" ] || die "versionCode $VC is below the floor $VERSION_CODE_FLOOR"
@@ -285,8 +288,8 @@ vdlu_feed() {
     cmp -s "$d/key.pub" "$kr/$VDLU_KEY_ID.pub" || die "VDLU_SIGN_KEY is not the private half of vdlu/keyring/$VDLU_KEY_ID.pub"
     local modid prev=()
     modid="$(prop_get id "$d/tree/module.prop")"
-    if git cat-file -e "$BASE_SHA:$VDLU_FEED_PATH/manifest.json" 2>/dev/null; then
-        git show "$BASE_SHA:$VDLU_FEED_PATH/manifest.json" > "$d/prev.json"; prev=(--prev "$d/prev.json")
+    if git cat-file -e "$MAIN_SHA:$VDLU_FEED_PATH/manifest.json" 2>/dev/null; then
+        git show "$MAIN_SHA:$VDLU_FEED_PATH/manifest.json" > "$d/prev.json"; prev=(--prev "$d/prev.json")
     fi
     env -u RELEASE_TOKEN python3 -I "$d/bin/vdlu-pack" "$d/tree" "$d/feed" "$modid" "$VC" \
         --version-name "$VERSION" --channel stable "${prev[@]}" >&2 || die "vdlu-pack failed"
