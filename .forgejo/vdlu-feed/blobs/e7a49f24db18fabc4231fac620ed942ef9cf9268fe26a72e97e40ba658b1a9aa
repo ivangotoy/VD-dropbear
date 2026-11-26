@@ -1,0 +1,10 @@
+profile=hardened
+source=https://git.digtvbg.com/ivangotoy/VD-dropbear/raw/branch/main/.forgejo/vdlu-feed
+channel=stable
+auto_on_reboot=1
+auto_on_webui_open=1
+pubkey_dir=keyring
+net_policy=any
+boot_retry_interval=30
+boot_retry_minutes=1440
+key_id=ivangotoy-2026

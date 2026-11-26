@@ -1,6 +1,6 @@
 {
-  "version": "v1.13-ci15",
-  "versionCode": 10018,
-  "zipUrl": "https://git.digtvbg.com/ivangotoy/VD-dropbear/releases/download/v1.13-ci15/VD-dropbear-v1.13-ci15.zip",
-  "changelog": "https://git.digtvbg.com/ivangotoy/VD-dropbear/raw/commit/04b7efaa13d3e7266fda660c3ce72f26e40f64d3/CHANGELOG.md"
+  "version": "v1.13-ci16",
+  "versionCode": 10019,
+  "zipUrl": "https://git.digtvbg.com/ivangotoy/VD-dropbear/releases/download/v1.13-ci16/VD-dropbear-v1.13-ci16.zip",
+  "changelog": "https://git.digtvbg.com/ivangotoy/VD-dropbear/raw/commit/83335cd620e1432b5b3fa0782d7f784d033e2e1d/CHANGELOG.md"
 }
