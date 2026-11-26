@@ -147,6 +147,9 @@ acquire_lock_try() {   # non-blocking: 0 = acquired, 1 = busy (NO exit). The pat
 	local opid
 	if ! mkdir "$VDLU_DIR/lock.d" 2>/dev/null; then
 		opid=$(cat "$VDLU_DIR/lock.d/pid" 2>/dev/null)
+		# no pid yet in a lock made within the last minute: its owner is between mkdir and writing the
+		# pid, not dead; taking it would put two runs on the same .work
+		[ -z "$opid" ] && [ -n "$(find "$VDLU_DIR/lock.d" -maxdepth 0 -mmin -1 2>/dev/null)" ] && return 1
 		if [ -z "$opid" ] || ! kill -0 "$opid" 2>/dev/null; then
 			rm -rf "$VDLU_DIR/lock.d" 2>/dev/null
 			mkdir "$VDLU_DIR/lock.d" 2>/dev/null || return 1

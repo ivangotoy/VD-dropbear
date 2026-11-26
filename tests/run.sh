@@ -1088,6 +1088,23 @@ t_vdlu_ca_bundle_replaced() {
     veng status >/dev/null 2>&1
     expect_eq "$(cat "$W/cab")" keep
 }
+# V3: a lock directory without a pid yet belongs to a run that has just made it; a second run must
+# report busy (exit 4) and leave it, not take it as stale. A pid-less lock older than a minute and a
+# lock of a dead pid are still taken.
+t_vdlu_lock_fresh_not_stolen() {
+    vdlu_setup
+    vdlu_tree "$W/v2" 2; vfeed "$W/v2" "$W/feed" 2
+    mkdir "$VD/lock.d"
+    out=$(veng check 2>&1); rc=$?
+    expect_eq "$rc" 4 || { fail "$out"; return 1; }
+    [ -d "$VD/lock.d" ] || { fail "fresh lock removed"; return 1; }
+    touch -t 202001010000 "$VD/lock.d"
+    out=$(veng check 2>&1); rc=$?
+    expect_eq "$rc" 0 || { fail "old pid-less lock not taken: $out"; return 1; }
+    mkdir "$VD/lock.d"; sh -c 'echo $$ > "$1"' _ "$VD/lock.d/pid"
+    out=$(veng check 2>&1); rc=$?
+    expect_eq "$rc" 0 || fail "lock of a dead pid not taken: $out"
+}
 # F12: scripts/build-bundles.sh fetch() must not reuse a partial download as a cached tarball
 t_build_fetch_partial() {
     sed -n '/^fetch() {/,/^}/p' "$REPO/scripts/build-bundles.sh" > "$W/fetch.sh"
@@ -1555,7 +1572,7 @@ PY
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_add_key_commented t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_bfu_move_failure_reported t_bfu_rename_failure_reported t_bfu_move_odd_names t_bfu_switch_nothing_to_move t_bfu_stale_temp_ignored t_webui_status t_webui_verbs_exit_zero
 t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_freezer_escape t_freezer_escape_not_writable t_freezer_escape_uid_layout t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
-t_service_disabled t_customize t_uninstall t_sha256_gate t_gen_sha256_failure t_build_zip_sha256 t_build_zip_reproducible t_build_zip_vdlu_shipped t_customize_vdlu_migrates t_vdlu_engine_applies_feed t_vdlu_engine_signed_feed t_vdlu_sig_cut_injection t_vdlu_ca_bundle_replaced t_build_fetch_partial t_build_fetch_pinned t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_build_kills_build_user t_workflow_builds_dispatched_commit t_ci_validate_json t_ci_parity_failure t_preflight_docnav_count t_preflight_release_pat t_repack_baseline_modes t_version_bump_atomic t_gen_update_json_checks t_wiki_sync_paths"
+t_service_disabled t_customize t_uninstall t_sha256_gate t_gen_sha256_failure t_build_zip_sha256 t_build_zip_reproducible t_build_zip_vdlu_shipped t_customize_vdlu_migrates t_vdlu_engine_applies_feed t_vdlu_engine_signed_feed t_vdlu_sig_cut_injection t_vdlu_ca_bundle_replaced t_vdlu_lock_fresh_not_stolen t_build_fetch_partial t_build_fetch_pinned t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_build_kills_build_user t_workflow_builds_dispatched_commit t_ci_validate_json t_ci_parity_failure t_preflight_docnav_count t_preflight_release_pat t_repack_baseline_modes t_version_bump_atomic t_gen_update_json_checks t_wiki_sync_paths"
 
 for c in $CASES; do run_case "$c"; done
 echo "summary: pass=$PASS fail=$FAIL skip=$SKIP${FAILED:+ failed:$FAILED}"
