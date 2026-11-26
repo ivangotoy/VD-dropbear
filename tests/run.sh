@@ -1310,6 +1310,20 @@ t_vdlu_webui_late_cancel_removed() {
     printf '%s\n' "cancelRequested = true; finishDone({ state: 'DONE', target: 2 }); console.log(CMDS.join(';'));" >> "$W/t.js"
     expect_has "$(node "$W/t.js")" "rm -f '/vd/cancel'"
 }
+# F1: the engine's lock records the boot it was taken in: a lock left by a run killed at power-off is
+# taken after the reboot even when its pid now belongs to a live process; in the same boot that lock
+# keeps other runs out (busy, exit 4).
+t_vdlu_lock_from_earlier_boot() {
+    [ -r /proc/sys/kernel/random/boot_id ] || return 77
+    vdlu_setup
+    vdlu_tree "$W/v2" 2; vfeed "$W/v2" "$W/feed" 2
+    mkdir "$VD/lock.d"; echo $$ > "$VD/lock.d/pid"; cat /proc/sys/kernel/random/boot_id > "$VD/lock.d/boot"
+    out=$(veng check 2>&1); rc=$?
+    expect_eq "$rc" 4 || { fail "same boot: $out"; return 1; }
+    echo 00000000-0000-0000-0000-000000000000 > "$VD/lock.d/boot"
+    out=$(veng check 2>&1); rc=$?
+    expect_eq "$rc" 0 || fail "lock of an earlier boot not taken: $out"
+}
 # F12: scripts/build-bundles.sh fetch() must not reuse a partial download as a cached tarball
 t_build_fetch_partial() {
     sed -n '/^fetch() {/,/^}/p' "$REPO/scripts/build-bundles.sh" > "$W/fetch.sh"
@@ -1886,7 +1900,7 @@ PY
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_add_key_commented t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_bfu_move_failure_reported t_bfu_rename_failure_reported t_bfu_move_odd_names t_bfu_switch_nothing_to_move t_bfu_stale_temp_ignored t_webui_status t_webui_verbs_exit_zero
 t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_freezer_escape t_freezer_escape_not_writable t_freezer_escape_uid_layout t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
-t_service_disabled t_customize t_uninstall t_sha256_gate t_gen_sha256_failure t_build_zip_sha256 t_build_zip_reproducible t_build_zip_vdlu_shipped t_customize_vdlu_migrates t_vdlu_engine_applies_feed t_vdlu_engine_signed_feed t_vdlu_sig_cut_injection t_vdlu_ca_bundle_replaced t_vdlu_lock_fresh_not_stolen t_vdlu_diff_failure_journal t_vdlu_pruned_target_recovers t_vdlu_fetched_target_applies_offline t_vdlu_stale_cancel_cleared t_vdlu_engine_refuses_bad_feeds t_vdlu_webui_config_safe t_vdlu_webui_toast_info_cleared t_vdlu_webui_late_cancel_removed t_build_fetch_partial t_build_fetch_pinned t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_release_version_code_above_published t_release_vdlu_key_required t_vdlu_release_feed_updates_device t_build_kills_build_user t_workflow_builds_dispatched_commit t_ci_validate_json t_ci_parity_failure t_preflight_docnav_count t_preflight_release_pat t_repack_baseline_modes t_version_bump_atomic t_gen_update_json_checks t_wiki_sync_paths"
+t_service_disabled t_customize t_uninstall t_sha256_gate t_gen_sha256_failure t_build_zip_sha256 t_build_zip_reproducible t_build_zip_vdlu_shipped t_customize_vdlu_migrates t_vdlu_engine_applies_feed t_vdlu_engine_signed_feed t_vdlu_sig_cut_injection t_vdlu_ca_bundle_replaced t_vdlu_lock_fresh_not_stolen t_vdlu_diff_failure_journal t_vdlu_pruned_target_recovers t_vdlu_fetched_target_applies_offline t_vdlu_stale_cancel_cleared t_vdlu_engine_refuses_bad_feeds t_vdlu_webui_config_safe t_vdlu_webui_toast_info_cleared t_vdlu_webui_late_cancel_removed t_vdlu_lock_from_earlier_boot t_build_fetch_partial t_build_fetch_pinned t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_release_version_code_above_published t_release_vdlu_key_required t_vdlu_release_feed_updates_device t_build_kills_build_user t_workflow_builds_dispatched_commit t_ci_validate_json t_ci_parity_failure t_preflight_docnav_count t_preflight_release_pat t_repack_baseline_modes t_version_bump_atomic t_gen_update_json_checks t_wiki_sync_paths"
 
 for c in $CASES; do run_case "$c"; done
 echo "summary: pass=$PASS fail=$FAIL skip=$SKIP${FAILED:+ failed:$FAILED}"
