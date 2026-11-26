@@ -44,10 +44,9 @@ setup() {
     W=$(mktemp -d "$BASE/case.XXXXXX")
     MOD=$W/mod ROOT=$W/root STUB=$W/stub FAKE=$W/fake
     mkdir -p "$MOD" "$ROOT/data/adb" "$ROOT/data/misc_ce/0" "$ROOT/dev" "$STUB" "$FAKE"
-    # module copy without the VDLU updater (vdlu/, webroot/vdlu.*: their own cases below, so service.sh
-    # starts no update run here) and with its own stub binaries
-    (cd "$REPO/module" && tar -cf - --exclude=./bin --exclude=./vdlu --exclude=./webroot/vdlu.js \
-        --exclude=./webroot/vdlu.css .) | (cd "$MOD" && tar -xf -)
+    # module copy without the VDLU updater (vdlu/, webroot/vdlu.* and, in a built tree, their .sha256
+    # companions: own cases below, so service.sh starts no update run here), with its own stub binaries
+    (cd "$REPO/module" && tar -cf - --exclude=./bin --exclude=./vdlu --exclude='./webroot/vdlu.*' .) | (cd "$MOD" && tar -xf -)
     mkdir -p "$MOD/bin/x86_64"
     B=$MOD/bin/x86_64
     printf 'ro.product.cpu.abi=x86_64\nsys.user.0.ce_available=true\n' > "$W/props"
