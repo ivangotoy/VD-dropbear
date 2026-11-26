@@ -414,7 +414,7 @@ validate_meta() {
 	wantch=$(cfg channel stable)
 	[ -z "$ch" ] || [ "$ch" = "$wantch" ] || { echo "VDLU: channel mismatch ($ch != $wantch)" >&2; return 1; }
 	prof=$(cfg profile hardened | tr -d '[:space:]')   # fail-closed (see verify_manifest): anything != trusted = hardened
-	if [ "$prof" != trusted ] && [ -f "$CURRENT" ] && isnum "$FROMVER"; then
+	if [ "$prof" != trusted ] && isnum "$FROMVER" && [ "$FROMVER" -gt 0 ]; then
 		[ "$ver" -ge "$FROMVER" ] || { echo "VDLU: downgrade blocked ($ver < $FROMVER)" >&2; return 4; }
 	fi
 	return 0
@@ -864,6 +864,11 @@ diff_feed() {
 	if [ -f "$CURRENT" ]; then
 		json_flatten "$CURRENT" >"$WORK/current.flat" 2>/dev/null
 		FROMVER=$(grep -m1 "^version$TAB" "$WORK/current.flat" | cut -f2)
+		isnum "$FROMVER" || FROMVER=0
+	else
+		# no current.json (an install without baseline.json, or one removed): the installed
+		# module.prop's versionCode is the version the downgrade check holds the feed to
+		FROMVER=$(sed -n 's/^versionCode=//p' "$MODULE_DIR/module.prop" 2>/dev/null | head -n 1 | tr -d '\r')
 		isnum "$FROMVER" || FROMVER=0
 	fi
 	validate_meta || { _vr=$?; [ "$_vr" = 4 ] && return 4; return 3; }
