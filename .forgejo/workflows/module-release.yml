@@ -36,6 +36,8 @@ jobs:
       - name: Release (script and config from the dispatched commit)
         env:
           RELEASE_TOKEN: ${{ secrets.MODULE_RELEASE_TOKEN }}
+          # PEM private key that signs the VDLU feed (this step only; module-ci.sh moves it to a 0600 file)
+          VDLU_SIGN_KEY: ${{ secrets.VDLU_SIGN_KEY }}
           SERVER_URL: ${{ github.server_url }}
           REPOSITORY: ${{ github.repository }}
           BASE_SHA: ${{ github.sha }}

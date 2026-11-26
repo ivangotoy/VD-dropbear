@@ -848,11 +848,17 @@ EOF
 # build_zip <outdir> [touch -t stamp]: the real build() from .forgejo/module-ci.conf, run by bash as
 # module-ci.sh build-user runs it (forge https://forge.invalid, repo example/VD-dropbear), on a tar
 # copy of the files it reads (all given that mtime when a stamp is passed); the zip lands in
-# <outdir>/module.zip
+# <outdir>/module.zip. VDLU_TEST_KEY=<id>: the conf's VDLU key is $W/keys/<id>.pub instead of the
+# owner's; BUILD_EDIT: shell code run in the copy's module/ before the build.
 build_zip() {
-    rm -rf "$W/src"; mkdir -p "$W/src" "$1"
+    rm -rf "$W/src"; mkdir -p "$W/src" "$1"; rm -f "$1/module.zip"   # zip(1) adds to an existing archive
     (cd "$REPO" && tar -cf - module LICENSE NOTICE THIRD-PARTY-NOTICES.md .forgejo/module-ci.conf .forgejo/vdlu \
         .github/scripts/gen-sha256.sh) | (cd "$W/src" && tar -xf -)
+    if [ -n "${VDLU_TEST_KEY:-}" ]; then   # sign with a throwaway key: it replaces the owner's in the conf
+        cp "$W/keys/$VDLU_TEST_KEY.pub" "$W/src/.forgejo/vdlu/"
+        sed -i "s/^VDLU_KEY_ID=.*/VDLU_KEY_ID=$VDLU_TEST_KEY/" "$W/src/.forgejo/module-ci.conf"
+    fi
+    [ -z "${BUILD_EDIT:-}" ] || (cd "$W/src/module" && eval "$BUILD_EDIT") || { fail "BUILD_EDIT"; return 1; }
     [ -z "${2:-}" ] || find "$W/src" -exec touch -t "$2" {} +
     (cd "$W/src" && OUT=$1 SERVER_URL=https://forge.invalid REPOSITORY=example/VD-dropbear bash -c '. .forgejo/module-ci.conf; build') > "$W/build.log" 2>&1 \
         || { fail "build(): $(tail -n 2 "$W/build.log" | tr '\n' ' ')"; return 1; }
@@ -1176,6 +1182,35 @@ t_vdlu_stale_cancel_cleared() {
     expect_eq "$rc" 0 || { fail "$out"; return 1; }
     expect_eq "$(cat "$MD/a.txt")" "a 2"
 }
+# G8 negatives on the engine (stub verifier, any shell): a manifest with a '..' or absolute file path
+# or delete path, a tampered blob, and a feed older than the installed version are refused; the
+# module tree is not changed.
+t_vdlu_engine_refuses_bad_feeds() {
+    vdlu_setup
+    vdlu_tree "$W/v1" 1; (cd "$W/v1" && tar -cf - .) | (cd "$MD" && tar -xf -)
+    vdlu_tree "$W/v2" 2; vfeed "$W/v2" "$W/feed" 2; cp "$W/feed/manifest.json" "$W/good.json"
+    for _e in 's|"path":"a.txt"|"path":"../a.txt"|' 's|"path":"a.txt"|"path":"/tmp/a.txt"|' \
+              's|"path":"a.txt"|"path":"common/../../a.txt"|' 's|"delete":\[\]|"delete":["../x"]|' 's|"delete":\[\]|"delete":["/x"]|'; do
+        sed "$_e" "$W/good.json" > "$W/feed/manifest.json"
+        cmp -s "$W/good.json" "$W/feed/manifest.json" && { fail "[$_e] fixture unchanged"; return 1; }
+        out=$(veng run 2>&1); rc=$?
+        [ "$rc" != 0 ] || { fail "[$_e] accepted"; return 1; }
+        expect_has "$out" "unsafe" || return 1
+        expect_eq "$(cat "$MD/a.txt")" "a 1" || return 1
+    done
+    cp "$W/good.json" "$W/feed/manifest.json"
+    _h=$(sha256sum "$W/v2/a.txt" | cut -d' ' -f1); echo "a 666" > "$W/feed/blobs/$_h"
+    out=$(veng run 2>&1); rc=$?
+    [ "$rc" != 0 ] || { fail "tampered blob accepted"; return 1; }
+    expect_eq "$(cat "$MD/a.txt")" "a 1" || return 1
+    cp "$W/v2/a.txt" "$W/feed/blobs/$_h"
+    veng run >/dev/null 2>&1 || { fail "good feed refused"; return 1; }
+    expect_eq "$(cat "$MD/a.txt")" "a 2" || return 1
+    rm -rf "$W/feed"; vfeed "$W/v1" "$W/feed" 1
+    out=$(veng run 2>&1); rc=$?
+    expect_has "$out" "downgrade blocked (1 < 2)" || return 1
+    expect_eq "$(cat "$MD/a.txt")" "a 2"
+}
 # F12: scripts/build-bundles.sh fetch() must not reuse a partial download as a cached tarball
 t_build_fetch_partial() {
     sed -n '/^fetch() {/,/^}/p' "$REPO/scripts/build-bundles.sh" > "$W/fetch.sh"
@@ -1284,10 +1319,14 @@ EOF
 # release_run <name>: runs the release step in $W/<name>; env knobs for the stub: PATCH_RC (exit
 # of the publish PATCH after the forge applied it), ANON_OK_AT / POLL_OK_AT (attempt that first
 # succeeds), REJECT_PUSH=1 (the forge refuses pushes once seeded), SEED_UPDATE_JSON (the
-# .forgejo/update.json main holds at the base commit). Sets RR (rc), RD (run dir).
+# .forgejo/update.json main holds at the base commit), SEED_DIR (more files for that commit),
+# RUN_NO (run number, 7), VKEY (the PEM file given as VDLU_SIGN_KEY, default the throwaway
+# test-2026 key; "none" = no secret). The base commit holds the conf, .forgejo/vdlu/ and
+# module/vdlu/vdlu-verify of the build. Sets RR (rc), RD (run dir).
 release_setup() {
-    for _t in bash python3 git zip unzip; do command -v "$_t" >/dev/null 2>&1 || return 77; done
-    build_zip "$W/out" || return 1
+    for _t in bash python3 git zip unzip openssl gzip; do command -v "$_t" >/dev/null 2>&1 || return 77; done
+    vkey test-2026 || { fail "openssl ed25519 keygen"; return 1; }
+    VDLU_TEST_KEY=test-2026 build_zip "$W/out" || return 1
     RTOKEN=tok-example-not-a-secret-1234
     # what the release computes from module.prop and the conf (run number 7), as module-ci.sh does
     _c=$REPO/.forgejo/module-ci.conf
@@ -1300,7 +1339,9 @@ release_run() {
     RD=$W/$1; F=$RD/forge-state
     mkdir -p "$RD/forge/owner" "$RD/seed/.forgejo" "$RD/work/.ci-out" "$RD/job" "$RD/bin" "$RD/tmp" "$F"
     git init -q --bare "$RD/forge/owner/repo.git" && git init -q "$RD/seed" || { fail "fixture repos"; return 1; }
-    cp "$REPO/.forgejo/module-ci.conf" "$RD/seed/.forgejo/"; echo "# changes" > "$RD/seed/CHANGELOG.md"
+    mkdir -p "$RD/seed/module/vdlu"; cp -R "$W/src/.forgejo/module-ci.conf" "$W/src/.forgejo/vdlu" "$RD/seed/.forgejo/"
+    cp "$W/src/module/vdlu/vdlu-verify" "$RD/seed/module/vdlu/"; echo "# changes" > "$RD/seed/CHANGELOG.md"
+    [ -z "${SEED_DIR:-}" ] || cp -R "$SEED_DIR/." "$RD/seed/"
     [ -z "${SEED_UPDATE_JSON:-}" ] || printf '%s\n' "$SEED_UPDATE_JSON" > "$RD/seed/.forgejo/update.json"
     (cd "$RD/seed" && git add -A && git -c user.name=t -c user.email=t@example.invalid commit -qm seed \
         && git push -q "$RD/forge/owner/repo.git" HEAD:refs/heads/main) || { fail "fixture push"; return 1; }
@@ -1343,9 +1384,10 @@ esac
 EOF
     printf '#!/bin/sh\necho "sleep $*" >> "%s/sleeps"\n' "$F" > "$RD/bin/sleep"
     chmod 755 "$RD/bin/curl" "$RD/bin/sleep"
-    RR=0
-    (cd "$RD/job" && env PATH="$RD/bin:$PATH" TMPDIR="$RD/tmp" SERVER_URL="file://$RD/forge" REPOSITORY=owner/repo \
-        BASE_SHA="$_base" RUN_NUMBER=7 RELEASE_TOKEN="$RTOKEN" bash "$REPO/.forgejo/module-ci.sh" release "$RD/work") \
+    RR=0 _vk=${VKEY:-$W/keys/test-2026.pem}
+    (if [ "$_vk" != none ]; then VDLU_SIGN_KEY=$(cat "$_vk"); export VDLU_SIGN_KEY; fi
+     cd "$RD/job" && env PATH="$RD/bin:$PATH" TMPDIR="$RD/tmp" SERVER_URL="file://$RD/forge" REPOSITORY=owner/repo \
+        BASE_SHA="$_base" RUN_NUMBER="${RUN_NO:-7}" RELEASE_TOKEN="$RTOKEN" bash "$REPO/.forgejo/module-ci.sh" release "$RD/work") \
         > "$RD/out.log" 2>&1 || RR=$?
     return 0
 }
@@ -1365,6 +1407,17 @@ t_release_end_to_end() {
     out=$(gate_out "$W/flashed"); rc=$?
     expect_eq "$rc" 0 || { fail "released zip fails the flash gate: $out"; return 1; }
     grep -qF "$RTOKEN" "$F/argv" "$RD/out.log" && { fail "token in argv or output"; return 1; }
+    sed -n 2p "$W/keys/test-2026.pem" > "$W/keyline"
+    grep -qF -f "$W/keyline" "$F/argv" "$RD/out.log" && { fail "signing key in argv or output"; return 1; }
+    # the VDLU feed lands in the same commit as update.json, signed for this versionCode, and is the
+    # zip's vdlu/baseline.json
+    _g="git --git-dir=$RD/forge/owner/repo.git"
+    expect_eq "$($_g show --format= --name-only main | grep -c -e '^.forgejo/update.json$' -e '^.forgejo/vdlu-feed/manifest.json$')" 2 || return 1
+    $_g show main:.forgejo/vdlu-feed/manifest.json > "$W/m.json"
+    expect_has "$(cat "$W/m.json")" "\"version\":$RVC," || return 1
+    expect_has "$(cat "$W/m.json")" '"key_id":"test-2026"' || return 1
+    cmp -s "$W/m.json" "$W/flashed/vdlu/baseline.json" || { fail "baseline.json is not the feed's manifest"; return 1; }
+    expect_eq "$(cat "$W/flashed/vdlu/baseline.json.sha256")" "$(cd "$W/flashed/vdlu" && sha256sum baseline.json)" || return 1
     tm=$(sed -n 's/^ *timeout-minutes: *\([0-9]*\).*/\1/p' "$REPO/.forgejo/workflows/module-release.yml")
     worst=$(awk -v s="$(cat "$F/sleeps" 2>/dev/null | awk '{t+=$2} END {print t+0}')" '
         { b = $3 * ($4 + 1) + ($4 > 0 ? 7 : 0); t += b; if ($1 == "GET" && $4 > 0 && b > g) g = b }
@@ -1389,6 +1442,7 @@ t_release_failure_after_publish() {
     o=$(cat "$RD/out.log")
     expect_has "$o" "failure after publishing $RTAG" || return 1
     expect_has "$o" "commit .forgejo/update.json on main with the content below" || return 1
+    expect_has "$o" "the VDLU feed .forgejo/vdlu-feed on main still serves the previous release" || return 1
     expect_has "$o" "\"versionCode\": $RVC," || return 1
     expect_has "$o" "\"zipUrl\": \"file://$RD/forge/owner/repo/releases/download/$RTAG/$RZIP\"" || return 1
     ANON_OK_AT=9 release_run anon || return 1
@@ -1410,13 +1464,81 @@ t_release_version_code_above_published() {
     expect_eq "$(unzip -p "$F/asset.zip" module.prop | sed -n 's/^versionCode=//p')" "$((RVC + 1))" || return 1
     SEED_UPDATE_JSON='{"version": "v0-ci1", "versionCode": 1}' release_run low || return 1
     expect_has "$(git --git-dir="$RD/forge/owner/repo.git" show main:.forgejo/update.json)" "\"versionCode\": $RVC," || return 1
+    _n=0
     for _j in '{"versionCode": "10018"}' '{"versionCode": 10018.0}' '{"versionCode": true}' 'versionCode=10018'; do
-        SEED_UPDATE_JSON=$_j release_run bad || return 1
+        _n=$((_n + 1)); SEED_UPDATE_JSON=$_j release_run "bad$_n" || return 1
         [ "$RR" != 0 ] || { fail "[$_j] exit 0"; return 1; }
         grep -q 'has no integer versionCode' "$RD/out.log" || { fail "[$_j] $(tail -n 2 "$RD/out.log" | tr '\n' ' ')"; return 1; }
         grep -q '^POST ' "$F/calls" 2>/dev/null && { fail "[$_j] a release was created"; return 1; }
     done
     return 0
+}
+# G5: without the signing secret, with a key that is not the shipped key's private half, or with a
+# PEM that is no key, the release stops before creating anything on the forge.
+t_release_vdlu_key_required() {
+    release_setup || return $?
+    vkey other-2026 || { fail "keygen"; return 1; }
+    _p='PRIVATE KEY'; printf -- '-----BEGIN %s-----\nbm90IGEga2V5\n-----END %s-----\n' "$_p" "$_p" > "$W/keys/bad.pem"   # a PEM frame around no key
+    _n=0
+    for _k in none "$W/keys/other-2026.pem" "$W/keys/bad.pem"; do
+        _n=$((_n + 1)); VKEY=$_k release_run "k$_n" || return 1
+        [ "$RR" != 0 ] || { fail "[$_k] exit 0"; return 1; }
+        grep -q 'VDLU_SIGN_KEY' "$RD/out.log" || { fail "[$_k] $(tail -n 2 "$RD/out.log" | tr '\n' ' ')"; return 1; }
+        grep -q '^POST ' "$F/calls" 2>/dev/null && { fail "[$_k] a release was created"; return 1; }
+    done
+    return 0
+}
+# G8: end to end and offline. Release N (the build plus common/extra-n.txt) and N+1 (action.sh changed,
+# extra-n.txt gone; same upstream version, so N+1 gets N's versionCode + 1) go through the real
+# release step with a throwaway key; a device flashed with release N (its customize.sh) sees no update
+# in feed N (the baseline matches the zip), then the shipped update.sh updates it from feed N+1 over
+# file://: the tree is N+1's, extra-n.txt deleted, module.prop at N+1's versionCode. Feed N+1 re-signed
+# by another key under the same key id is refused. Needs what the release cases need.
+t_vdlu_release_feed_updates_device() {
+    release_setup || return $?
+    BUILD_EDIT='echo "only in N" > common/extra-n.txt' VDLU_TEST_KEY=test-2026 build_zip "$W/out" || return 1
+    release_run relN || return 1
+    expect_eq "$RR" 0 || { fail "release N: $(tail -n 3 "$RD/out.log" | tr '\n' ' ')"; return 1; }
+    cp "$F/asset.zip" "$W/N.zip"; mkdir -p "$W/seed1" "$W/fN"
+    git --git-dir="$RD/forge/owner/repo.git" archive main .forgejo/update.json .forgejo/vdlu-feed | tar -x -C "$W/seed1"
+    cp -R "$W/seed1/.forgejo/vdlu-feed/." "$W/fN/"
+    BUILD_EDIT='echo "# N+1" >> action.sh' VDLU_TEST_KEY=test-2026 build_zip "$W/out" || return 1
+    SEED_DIR=$W/seed1 RUN_NO=8 release_run relN1 || return 1
+    expect_eq "$RR" 0 || { fail "release N+1: $(tail -n 3 "$RD/out.log" | tr '\n' ' ')"; return 1; }
+    cp "$F/asset.zip" "$W/N1.zip"; mkdir -p "$W/fN1x" "$W/n1"
+    git --git-dir="$RD/forge/owner/repo.git" archive main .forgejo/vdlu-feed | tar -x -C "$W/fN1x"
+    FN1=$W/fN1x/.forgejo/vdlu-feed
+    expect_eq "$(sed -n 's/.*"delete":\[\([^]]*\)\].*/\1/p' "$FN1/manifest.json")" '"common/extra-n.txt"' || return 1
+    (cd "$W/n1" && unzip -q "$W/N1.zip") || { fail "unzip N+1"; return 1; }
+    MOD=$W/dev; mkdir -p "$MOD"; (cd "$MOD" && unzip -q "$W/N.zip") || { fail "unzip N"; return 1; }
+    out=$(flash_mod); rc=$?
+    expect_eq "$rc" 0 || { fail "flash N: $out"; return 1; }
+    MD=$MOD VD=$DATA/vdlu
+    cp "$REPO/.forgejo/vdlu/ed25519-verify" "$MD/vdlu/ed25519-mini"; chmod 755 "$MD/vdlu/ed25519-mini"
+    sed -i "s|^source=.*|source=file://$W/fN|" "$VD/config"
+    out=$(veng check 2>&1); rc=$?
+    expect_eq "$rc" 0 || { fail "check N: $out"; return 1; }
+    expect_has "$out" '{"update":false,' || return 1
+    sed -i "s|^source=.*|source=file://$FN1|" "$VD/config"
+    out=$(veng run 2>&1); rc=$?
+    expect_eq "$rc" 0 || { fail "update to N+1: $out"; return 1; }
+    expect_has "$out" "vdlu-verify: OK key_id=test-2026" || return 1
+    [ ! -e "$MD/common/extra-n.txt" ] || { fail "extra-n.txt not deleted"; return 1; }
+    expect_eq "$(sed -n 's/^versionCode=//p' "$MD/module.prop")" "$((RVC + 1))" || return 1
+    cmp -s "$MD/action.sh" "$W/n1/action.sh" || { fail "action.sh is not N+1's"; return 1; }
+    python3 -I - "$FN1/manifest.json" "$MD" > "$W/py" 2>&1 <<'PY' || { fail "$(tr '\n' ' ' < "$W/py")"; return 1; }
+import hashlib, json, os, sys
+m, d = json.load(open(sys.argv[1])), sys.argv[2]
+bad = [f["path"] for f in m["files"] if not f["path"].startswith("vdlu/")
+       and hashlib.sha256(open(os.path.join(d, f["path"]), "rb").read()).hexdigest() != f["sha256"]]
+sys.exit("differ from N+1: " + " ".join(bad)) if bad else None
+PY
+    vkey other-2026 || { fail "keygen"; return 1; }
+    mkdir -p "$W/fX"; cp -R "$FN1/." "$W/fX/"; vsign "$W/fX/manifest.json" other-2026 test-2026 || { fail "re-sign"; return 1; }
+    sed -i "s|^source=.*|source=file://$W/fX|" "$VD/config"
+    out=$(veng run 2>&1); rc=$?
+    [ "$rc" != 0 ] || { fail "manifest signed by another key accepted"; return 1; }
+    expect_has "$out" "SIGNATURE REJECTED"
 }
 # module-ci.sh build: whatever the build user started is killed after the build, failed or not.
 # setpriv and chown are stubs: the stub records a kill and never runs it (here the test user may
@@ -1665,7 +1787,7 @@ PY
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_add_key_commented t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_bfu_move_failure_reported t_bfu_rename_failure_reported t_bfu_move_odd_names t_bfu_switch_nothing_to_move t_bfu_stale_temp_ignored t_webui_status t_webui_verbs_exit_zero
 t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_freezer_escape t_freezer_escape_not_writable t_freezer_escape_uid_layout t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
-t_service_disabled t_customize t_uninstall t_sha256_gate t_gen_sha256_failure t_build_zip_sha256 t_build_zip_reproducible t_build_zip_vdlu_shipped t_customize_vdlu_migrates t_vdlu_engine_applies_feed t_vdlu_engine_signed_feed t_vdlu_sig_cut_injection t_vdlu_ca_bundle_replaced t_vdlu_lock_fresh_not_stolen t_vdlu_diff_failure_journal t_vdlu_pruned_target_recovers t_vdlu_fetched_target_applies_offline t_vdlu_stale_cancel_cleared t_build_fetch_partial t_build_fetch_pinned t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_release_version_code_above_published t_build_kills_build_user t_workflow_builds_dispatched_commit t_ci_validate_json t_ci_parity_failure t_preflight_docnav_count t_preflight_release_pat t_repack_baseline_modes t_version_bump_atomic t_gen_update_json_checks t_wiki_sync_paths"
+t_service_disabled t_customize t_uninstall t_sha256_gate t_gen_sha256_failure t_build_zip_sha256 t_build_zip_reproducible t_build_zip_vdlu_shipped t_customize_vdlu_migrates t_vdlu_engine_applies_feed t_vdlu_engine_signed_feed t_vdlu_sig_cut_injection t_vdlu_ca_bundle_replaced t_vdlu_lock_fresh_not_stolen t_vdlu_diff_failure_journal t_vdlu_pruned_target_recovers t_vdlu_fetched_target_applies_offline t_vdlu_stale_cancel_cleared t_vdlu_engine_refuses_bad_feeds t_build_fetch_partial t_build_fetch_pinned t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_release_version_code_above_published t_release_vdlu_key_required t_vdlu_release_feed_updates_device t_build_kills_build_user t_workflow_builds_dispatched_commit t_ci_validate_json t_ci_parity_failure t_preflight_docnav_count t_preflight_release_pat t_repack_baseline_modes t_version_bump_atomic t_gen_update_json_checks t_wiki_sync_paths"
 
 for c in $CASES; do run_case "$c"; done
 echo "summary: pass=$PASS fail=$FAIL skip=$SKIP${FAILED:+ failed:$FAILED}"

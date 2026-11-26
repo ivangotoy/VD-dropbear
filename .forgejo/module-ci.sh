@@ -4,8 +4,9 @@
 #   module-ci.sh build <workdir>    no forge token: merge upstream, build the zip
 #                                   (the build runs as an unprivileged user)
 #   module-ci.sh release <workdir>  forge token: version + updateJson into the zip,
-#                                   draft -> upload -> download back and verify ->
-#                                   push merge -> publish -> commit update.json
+#                                   [signed VDLU feed + baseline] -> draft -> upload ->
+#                                   download back and verify -> push merge -> publish ->
+#                                   commit update.json [+ the VDLU feed]
 # The release step runs this script and the config as fetched from the dispatched
 # commit, never the copies in the build workspace. A failure before publish
 # deletes the draft once the forge confirms it is still one (a lost reply to the
@@ -25,6 +26,10 @@
 #   build()                         runs in the tree, leaves the module zip at "$OUT/module.zip"
 #   prebuilt()                      instead of merge + build: puts an upstream release zip at
 #                                   "$OUT/module.zip" and a one-line source note in "$OUT/upstream-desc"
+#   VDLU_FEED_PATH, VDLU_KEY_ID     VDLU feed dir in main ("" = none) and the key id that signs it:
+#                                   the release packs the released zip's tree into a signed
+#                                   manifest.json + blobs/ (key: env VDLU_SIGN_KEY, PEM), ships the
+#                                   manifest as vdlu/baseline.json and commits the feed with update.json
 #   release_files()                 optional, release step: writes extra fork-only files for the
 #                                   update.json commit (in-app update feeds) and lists them in
 #                                   RELEASE_FILES; sees VERSION VC TAG ZIP_NAME ZIP_URL ZIP_SHA ZIP_SIZE
@@ -52,7 +57,7 @@ for k in sys.argv[1].split("."): d=d[int(k)] if k.isdigit() else d[k]
 print(d)' "$1"; }
 load_conf() {
     UPSTREAM_URL="" UPSTREAM_BRANCH="" ZIP_PREFIX="${REPOSITORY#*/}" VERSION_CODE_FLOOR=0 VERSION_CODE_OFFSET=0
-    UPDATE_JSON_PATH=".forgejo/update.json" SYNC_ROOT_PROP="" CHANGELOG_PATH=""
+    UPDATE_JSON_PATH=".forgejo/update.json" SYNC_ROOT_PROP="" CHANGELOG_PATH="" VDLU_FEED_PATH="" VDLU_KEY_ID=""
     . "$1"
 }
 
@@ -130,6 +135,11 @@ trap 'rm -rf "$AUTH_DIR"' EXIT
 AUTH_H="$AUTH_DIR/header"
 (umask 077; printf 'Authorization: token %s\n' "$RELEASE_TOKEN" > "$AUTH_H")
 auth() { printf 'Authorization: token %s' "$RELEASE_TOKEN"; }
+# The VDLU signing key (env VDLU_SIGN_KEY, PEM) the same way: the builtin printf writes it to a 0600
+# file in AUTH_DIR, then the variable is dropped, so no process started from here sees it
+VDLU_KEY="$AUTH_DIR/vdlu.pem"
+(umask 077; printf '%s\n' "${VDLU_SIGN_KEY:-}" > "$VDLU_KEY")
+unset VDLU_SIGN_KEY
 # Only reads are retried: a retried POST/PATCH/DELETE can repeat a change the forge made.
 # Time bounds: the release step must end (and run cleanup) well inside the job's
 # timeout-minutes, so the small JSON reads, which are retried or looped, get 60 s per
@@ -153,6 +163,10 @@ cd "$REL/repo"
 git cat-file -e "$BASE_SHA^{commit}" && git merge-base --is-ancestor "$BASE_SHA" HEAD || die "base $BASE_SHA not in main"
 git show "$BASE_SHA:.forgejo/module-ci.conf" > "$REL/module-ci.conf"
 load_conf "$REL/module-ci.conf"
+if [ -n "$VDLU_FEED_PATH" ]; then
+    [[ "$VDLU_KEY_ID" =~ ^[A-Za-z0-9._-]+$ ]] || die "VDLU_FEED_PATH needs VDLU_KEY_ID in module-ci.conf"
+    grep -q -- '-----BEGIN PRIVATE KEY-----' "$VDLU_KEY" || die "secret VDLU_SIGN_KEY is not set (or not a PEM private key): nothing published"
+fi
 
 # build results are data owned by the build user: regular files only, checked before use
 regular() { [ -f "$1" ] && [ ! -L "$1" ] || die "$1 is not a regular file"; }
@@ -254,6 +268,101 @@ for n in names:
         if want != got:
             sys.exit(f"sidecar {n} does not match {n[:-7]}")
 PY
+# VDLU (conf VDLU_FEED_PATH): the feed for exactly this zip, signed, and its manifest in the zip
+vdlu_feed() {
+    local d="$REL/vdlu" f
+    rm -rf "$d"; mkdir -p "$d/bin" "$d/tree" "$d/final"
+    # the producer and the verifier from the dispatched commit (never from the build workspace); the
+    # zip is build-user data and nothing in it runs here
+    for f in vdlu-pack vdlu-sign ed25519-verify; do git show "$BASE_SHA:.forgejo/vdlu/$f" > "$d/bin/$f"; done
+    git show "$BASE_SHA:module/vdlu/vdlu-verify" > "$d/bin/vdlu-verify"
+    cp "$d/bin/ed25519-verify" "$d/bin/ed25519-mini"; chmod 0755 "$d/bin/"*
+    vdlu_tree "$REL/$ZIP_NAME" "$d/tree"
+    local kr="$d/tree/vdlu/keyring"
+    [ "$(find "$kr" -name '*.pub' | wc -l)" = 1 ] && [ -f "$kr/$VDLU_KEY_ID.pub" ] \
+        || die "the zip's vdlu/keyring must hold exactly $VDLU_KEY_ID.pub"
+    openssl pkey -in "$VDLU_KEY" -pubout -outform DER 2>/dev/null | tail -c 32 > "$d/key.pub" || die "VDLU_SIGN_KEY is not a usable key"
+    cmp -s "$d/key.pub" "$kr/$VDLU_KEY_ID.pub" || die "VDLU_SIGN_KEY is not the private half of vdlu/keyring/$VDLU_KEY_ID.pub"
+    local modid prev=()
+    modid="$(prop_get id "$d/tree/module.prop")"
+    if git cat-file -e "$BASE_SHA:$VDLU_FEED_PATH/manifest.json" 2>/dev/null; then
+        git show "$BASE_SHA:$VDLU_FEED_PATH/manifest.json" > "$d/prev.json"; prev=(--prev "$d/prev.json")
+    fi
+    env -u RELEASE_TOKEN python3 -I "$d/bin/vdlu-pack" "$d/tree" "$d/feed" "$modid" "$VC" \
+        --version-name "$VERSION" --channel stable "${prev[@]}" >&2 || die "vdlu-pack failed"
+    # delete[] of earlier releases stays, so a device that skipped a release still removes its deletions
+    if [ -f "$d/prev.json" ]; then
+        python3 -I - "$d/feed/manifest.json" "$d/prev.json" <<'PY' || die "delete[] carry-over failed"
+import json, sys
+m, prev = json.load(open(sys.argv[1])), json.load(open(sys.argv[2]))
+now = {f["path"] for f in m["files"]}
+m["delete"] = sorted(set(m["delete"]) | {p for p in prev.get("delete", []) if isinstance(p, str) and p not in now})
+open(sys.argv[1], "w").write(json.dumps(m, sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n")
+PY
+    fi
+    env -u RELEASE_TOKEN TMPDIR="$AUTH_DIR" sh "$d/bin/vdlu-sign" "$d/feed/manifest.json" "$VDLU_KEY" "$VDLU_KEY_ID" >&2 \
+        || die "vdlu-sign failed"
+    # the device's check: the dispatched commit's vdlu-verify, the zip's keyring, only this key id
+    env -u RELEASE_TOKEN TMPDIR="$AUTH_DIR" VDLU_KEYID_ALLOW="$VDLU_KEY_ID" sh "$d/bin/vdlu-verify" "$d/feed/manifest.json" "$kr" >&2 \
+        || die "the signed manifest fails vdlu-verify with the shipped key"
+    python3 -I - "$d/feed/manifest.json" "$VC" "$modid" <<'PY' || die "signed manifest: wrong version or module"
+import json, sys
+m = json.load(open(sys.argv[1]))
+sys.exit(0 if m["version"] == int(sys.argv[2]) and m["module"] == sys.argv[3] else 1)
+PY
+    # vdlu-pack leaves vdlu/baseline.json and *.sha256 out of the manifest, so adding them changes no
+    # file it covers
+    python3 -I - "$REL/$ZIP_NAME" "$d/feed/manifest.json" <<'PY' || die "baseline.json not added to the zip"
+import hashlib, os, sys, zipfile
+zp, mp = sys.argv[1:]
+data = open(mp, "rb").read()
+add = {"vdlu/baseline.json": data,
+       "vdlu/baseline.json.sha256": (hashlib.sha256(data).hexdigest() + "  baseline.json\n").encode()}
+zin = zipfile.ZipFile(zp)
+when = zin.getinfo("module.prop").date_time
+with zipfile.ZipFile(zp + ".new", "w") as zout:
+    for info in zin.infolist():
+        if info.filename not in add:
+            zout.writestr(info, zin.read(info), compresslevel=9 if info.compress_type == zipfile.ZIP_DEFLATED else None)
+    for name, b in add.items():
+        zi = zipfile.ZipInfo(name, when)
+        zi.compress_type, zi.external_attr, zi.create_system = zipfile.ZIP_DEFLATED, 0o100644 << 16, 3
+        zout.writestr(zi, b, compresslevel=9)
+os.replace(zp + ".new", zp)
+PY
+    # the signed files[] is what a pack of the final zip gives: the baseline matches the shipped bytes
+    vdlu_tree "$REL/$ZIP_NAME" "$d/final"
+    env -u RELEASE_TOKEN python3 -I "$d/bin/vdlu-pack" "$d/final" "$d/check" "$modid" "$VC" >/dev/null 2>&1 || die "re-pack failed"
+    python3 -I - "$d/feed/manifest.json" "$d/check/manifest.json" "$d/final/vdlu/baseline.json" <<'PY' || die "the signed manifest does not match the final zip"
+import json, sys
+a, b = json.load(open(sys.argv[1])), json.load(open(sys.argv[2]))
+sys.exit(0 if a["files"] == b["files"] and open(sys.argv[1], "rb").read() == open(sys.argv[3], "rb").read() else 1)
+PY
+    log "VDLU feed: version $VC, $(find "$d/feed/blobs" -type f | wc -l) blobs, signed by $VDLU_KEY_ID"
+}
+# vdlu_tree <zip> <dir>: the zip's files with their zip modes; build-user data, so only relative
+# names without '..', regular files and directories
+vdlu_tree() {
+    python3 -I - "$1" "$2" <<'PY' || die "unsafe or unreadable zip entries"
+import os, stat, sys, zipfile
+z, out = zipfile.ZipFile(sys.argv[1]), sys.argv[2]
+for i in z.infolist():
+    n, mode = i.filename, i.external_attr >> 16
+    parts = n.rstrip("/").split("/")
+    if n.startswith("/") or "\\" in n or any(p in ("", ".", "..") for p in parts):
+        sys.exit("unsafe entry name: " + n)
+    dst = os.path.join(out, *parts)
+    if i.is_dir():
+        os.makedirs(dst, exist_ok=True); continue
+    if mode and not stat.S_ISREG(mode):
+        sys.exit("not a regular file: " + n)
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    with open(dst, "wb") as f:
+        f.write(z.read(i))
+    os.chmod(dst, 0o755 if mode & 0o111 else 0o644)
+PY
+}
+[ -z "$VDLU_FEED_PATH" ] || vdlu_feed
 ZIP="$REL/$ZIP_NAME"
 unzip -tq "$ZIP" >/dev/null || die "zip test failed"
 [ "$(unzip -p "$ZIP" module.prop | prop_get updateJson /dev/stdin)" = "$UPDATE_URL" ] || die "updateJson not set"
@@ -282,6 +391,7 @@ cleanup() {
         if [ "$CHECKED" = 1 ]; then
             log "failure after publishing $TAG: $UPDATE_URL did not confirm versionCode $VC"
             log "recovery: unless it answers $VC by now, commit $UPDATE_JSON_PATH on main with the content below, or dispatch the workflow again (it releases under a new tag)"
+            [ -z "${VDLU_FEED_PATH:-}" ] || log "the VDLU feed $VDLU_FEED_PATH on main still serves the previous release (its files were in this runner's workspace): the next dispatch publishes a new one"
             cat "$REL/update.json" >&2
         else
             log "failure after publishing $TAG: the published release failed the check above: delete release $TAG and tag $TAG by hand ($UPDATE_JSON_PATH on main still names the previous release)"
@@ -333,6 +443,12 @@ git checkout -q -B main FETCH_HEAD
 mkdir -p "$(dirname "$UPDATE_JSON_PATH")"
 cp "$REL/update.json" "$UPDATE_JSON_PATH"
 git add -- "$UPDATE_JSON_PATH"
+if [ -n "$VDLU_FEED_PATH" ]; then
+    # the feed is this release's pack whole: blobs no longer referenced by its manifest go
+    rm -rf "$VDLU_FEED_PATH"; mkdir -p "$(dirname "$VDLU_FEED_PATH")"
+    cp -R "$REL/vdlu/feed" "$VDLU_FEED_PATH"
+    git add -A -- "$VDLU_FEED_PATH"
+fi
 if declare -F release_files >/dev/null; then
     RELEASE_FILES="" ZIP_SIZE="$(stat -c %s "$ZIP")"
     release_files
