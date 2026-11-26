@@ -755,7 +755,7 @@ has_staged() { awk -F'\t' '$1=="reboot" && $2=="staged"{f=1} END{exit f?0:1}' "$
 
 swap_staged() {
 	sync 2>/dev/null
-	local class st mode enc sha size path sf live
+	local class st mode enc sha size path sf live rb
 	while IFS="$TAB" read -r class st mode enc sha size path; do
 		[ "$class" = reboot ] || continue
 		[ "$st" = staged ] || continue
@@ -766,7 +766,14 @@ swap_staged() {
 		mkdir -p "$(dirname "$live")" 2>/dev/null
 		mv -f "$sf" "$live" 2>/dev/null || { echo "VDLU: swap rename failed: $path" >&2; return 1; }
 		chmod "$mode" "$live" 2>/dev/null
-		[ "$(sha256f "$live")" = "$sha" ] || { echo "VDLU: post-swap verify failed: $path" >&2; return 1; }
+		if [ "$(sha256f "$live")" != "$sha" ]; then
+			# the staged file is gone (moved in): put back the file it replaced and mark the entry
+			# pending, so the next boot fetches (blob cache), stages and swaps it again
+			rb="$ROLLBACK/$TGTVER/$path"
+			if [ -e "$rb" ]; then cp -af "$rb" "$live" 2>/dev/null; else rm -f "$live"; fi
+			set_st "$path" pending
+			echo "VDLU: post-swap verify failed: $path (restored, re-staged next boot)" >&2; return 1
+		fi
 		set_st "$path" applied
 	done <"$PLAN"
 	return 0
