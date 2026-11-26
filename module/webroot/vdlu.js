@@ -55,7 +55,7 @@
     noResponse: 'No response', noResponseSub: 'the engine did not start or ended without a journal',
     checkBtn: 'Check for updates', updateNow: 'Update now', automation: 'Automation',
     onOpen: 'On WebUI open', onOpenSub: 'Runs VDLU in the background (applies LIVE, stages the <code>.so</code> for the reboot).',
-    onReboot: 'On reboot', onRebootSub: 'In pre-zygote applies everything, including the <code>.so</code>, with no extra reboot.',
+    onReboot: 'On reboot', onRebootSub: 'Checks for and applies updates in the background at boot; a <code>.so</code> it stages is swapped at the next boot.',
     bootRetryEvery: 'Boot retry every (s)', bootRetryUpTo: 'Boot retry up to (min)', bootRetryHint: 'If the device boots offline, keep retrying the manifest fetch. 0 min = off.',
     source: 'Source', saveSource: 'Save source', savedDot: 'Saved.',
     netPolicy: 'Network', netAny: 'Wi-Fi + mobile', netWifi: 'Wi-Fi only', netMobile: 'Mobile only',
