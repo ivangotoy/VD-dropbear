@@ -144,22 +144,31 @@ init_paths() {
 # mkdir-based lock (portable: toybox `flock` only takes the fd-form and its fd handling is
 # unreliable on Android, so flock is NOT used). mkdir is atomic; stale-lock recovery by PID.
 boot_id() { cat /proc/sys/kernel/random/boot_id 2>/dev/null; }
+# lock_stale <pid> <boot>: 0 when a lock.d holding them is stale. No pid yet in a lock made within the
+# last minute: its owner is between mkdir and writing the pid, not dead. A lock from an earlier boot (a
+# run killed by a power-off) is stale even if its pid now belongs to another process.
+lock_stale() {
+	[ -z "$1" ] && [ -n "$(find "$VDLU_DIR/lock.d" -maxdepth 0 -mmin -1 2>/dev/null)" ] && return 1
+	[ -z "$1" ] || ! kill -0 "$1" 2>/dev/null || { [ -n "$2" ] && [ "$2" != "$(boot_id)" ]; }
+}
 acquire_lock_try() {   # non-blocking: 0 = acquired, 1 = busy (NO exit). The patient boot retry backs off on 1.
-	local opid oboot
 	if ! mkdir "$VDLU_DIR/lock.d" 2>/dev/null; then
-		opid=$(cat "$VDLU_DIR/lock.d/pid" 2>/dev/null)
-		oboot=$(cat "$VDLU_DIR/lock.d/boot" 2>/dev/null)
-		# no pid yet in a lock made within the last minute: its owner is between mkdir and writing the
-		# pid, not dead; taking it would put two runs on the same .work
-		[ -z "$opid" ] && [ -n "$(find "$VDLU_DIR/lock.d" -maxdepth 0 -mmin -1 2>/dev/null)" ] && return 1
-		# a lock from an earlier boot (a run killed by a power-off) is stale even if its pid now belongs
-		# to another process
-		if [ -z "$opid" ] || ! kill -0 "$opid" 2>/dev/null || { [ -n "$oboot" ] && [ "$oboot" != "$(boot_id)" ]; }; then
-			rm -rf "$VDLU_DIR/lock.d" 2>/dev/null
-			mkdir "$VDLU_DIR/lock.d" 2>/dev/null || return 1
-		else
+		lock_stale "$(cat "$VDLU_DIR/lock.d/pid" 2>/dev/null)" "$(cat "$VDLU_DIR/lock.d/boot" 2>/dev/null)" || return 1
+		# Two runs can judge the same lock stale; the takeover happens under lock.take (mkdir is atomic),
+		# and the lock is judged again inside it, so a run that judged it before another run took it
+		# over stays out. A lock.take left by a killed run is removed after a minute.
+		if ! mkdir "$VDLU_DIR/lock.take" 2>/dev/null; then
+			[ -n "$(find "$VDLU_DIR/lock.take" -maxdepth 0 -mmin +1 2>/dev/null)" ] && rm -rf "$VDLU_DIR/lock.take" 2>/dev/null
 			return 1
 		fi
+		if [ -d "$VDLU_DIR/lock.d" ] && ! lock_stale "$(cat "$VDLU_DIR/lock.d/pid" 2>/dev/null)" "$(cat "$VDLU_DIR/lock.d/boot" 2>/dev/null)"; then
+			rmdir "$VDLU_DIR/lock.take" 2>/dev/null; return 1
+		fi
+		rm -rf "$VDLU_DIR/lock.d" 2>/dev/null
+		if ! mkdir "$VDLU_DIR/lock.d" 2>/dev/null; then rmdir "$VDLU_DIR/lock.take" 2>/dev/null; return 1; fi
+		echo $$ >"$VDLU_DIR/lock.d/pid" 2>/dev/null
+		boot_id >"$VDLU_DIR/lock.d/boot" 2>/dev/null
+		rmdir "$VDLU_DIR/lock.take" 2>/dev/null
 	fi
 	echo $$ >"$VDLU_DIR/lock.d/pid" 2>/dev/null
 	boot_id >"$VDLU_DIR/lock.d/boot" 2>/dev/null
