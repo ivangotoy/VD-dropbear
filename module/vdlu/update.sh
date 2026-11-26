@@ -767,11 +767,12 @@ swap_staged() {
 		mv -f "$sf" "$live" 2>/dev/null || { echo "VDLU: swap rename failed: $path" >&2; return 1; }
 		chmod "$mode" "$live" 2>/dev/null
 		if [ "$(sha256f "$live")" != "$sha" ]; then
-			# the staged file is gone (moved in): put back the file it replaced and mark the entry
-			# pending, so the next boot fetches (blob cache), stages and swaps it again
+			# the staged file is gone (moved in): put back the file it replaced and reset the entry, so
+			# the next boot stages and swaps it again: fetched when the cached blob still verifies (no
+			# download, so no network needed), else pending (downloaded again)
 			rb="$ROLLBACK/$TGTVER/$path"
 			if [ -e "$rb" ]; then cp -af "$rb" "$live" 2>/dev/null; else rm -f "$live"; fi
-			set_st "$path" pending
+			if [ -f "$BLOBS/$sha" ] && [ "$(sha256f "$BLOBS/$sha")" = "$sha" ]; then set_st "$path" fetched; else set_st "$path" pending; fi
 			echo "VDLU: post-swap verify failed: $path (restored, re-staged next boot)" >&2; return 1
 		fi
 		set_st "$path" applied
