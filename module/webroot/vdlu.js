@@ -255,8 +255,13 @@
   // ---- update cycle ------------------------------------------------------------------------------
   function stopPoll() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
 
-  function finishDone(j) {
+  // the run is over: a cancel requested after its last safe point would cancel the next run, so remove it
+  function endRun() {
+    if (cancelRequested) ex('rm -f ' + q(C.vdluDir + '/cancel')).then(null, function () {});
     stopPoll(); running = false; cancelRequested = false;
+  }
+  function finishDone(j) {
+    endRun();
     var v = j && j.target != null ? j.target : (lastJournal && lastJournal.target);
     renderToast(j || lastJournal || {}, {
       kind: 'ok',
@@ -266,7 +271,7 @@
     hideBanner();
   }
   function finishReboot(j) {
-    stopPoll(); running = false; cancelRequested = false;
+    endRun();
     var v = j && j.target != null ? j.target : null;
     renderToast(j, {
       kind: 'ok',
@@ -276,7 +281,7 @@
     showBanner(v);
   }
   function finishError(j) {
-    stopPoll(); running = false; cancelRequested = false;
+    endRun();
     var err = (j && j.error) ? j.error : T('engineFail');
     renderToast(j || {}, {
       kind: 'err',
@@ -303,7 +308,7 @@
   // net_policy deferred the download to the allowed network - a benign wait, NOT an error. Gentle toast,
   // resumes on the next check/boot (or a manual retry) when the device is on the right network.
   function finishDeferred(j) {
-    stopPoll(); running = false; cancelRequested = false;
+    endRun();
     renderToast(j || {}, {
       kind: 'info',
       line: '<b>' + esc(T('deferred')) + '</b> · ' + esc((j && j.current) || T('deferredSub')),
