@@ -812,7 +812,22 @@ run_pipeline() { # allow_swap
 }
 
 # ---- diff -----------------------------------------------------------------
+# do_diff ends every persisted (run/boot) check in a terminal journal state: it wrote DIFFING first,
+# and a failure left that, which the WebUI shows as a stuck, "resumable" transaction (and which holds
+# off its auto-update). rc 4 (device ahead of the feed) is benign: DONE at the installed version.
 do_diff() { # persist(0|1); rc: 2 fetch/parse, 3 verify/meta fail, 4 device AHEAD of feed (benign)
+	local _dr
+	diff_feed "$1"; _dr=$?
+	if [ "$_dr" != 0 ] && [ "$1" = 1 ]; then
+		case "$_dr" in
+			4) TGTVER=$FROMVER; write_journal diff DONE "" ;;
+			2) write_journal diff ERROR "" "update check failed: manifest download or parse" ;;
+			*) write_journal diff ERROR "" "update check failed: manifest refused (signature, metadata or paths)" ;;
+		esac
+	fi
+	return "$_dr"
+}
+diff_feed() {
 	local persist="$1" _vr
 	rm -rf "$WORK"; mkdir -p "$WORK"
 	# Early liveness journal (real runs only, persist=1 - NOT a read-only `check`): the WebUI poller would
