@@ -1050,6 +1050,35 @@ t_vdlu_engine_signed_feed() {
     cmp -s "$MD/a.txt" "$W/v2/a.txt" || { fail "a.txt not updated (gz blob)"; return 1; }
     [ ! -e "$MD/gone.txt" ] || fail "deleted path kept"
 }
+# V1: text placed next to the signature (between '"sig":"<sig>"' and the next '",') is not covered
+# by it but is parsed by the engine: a feed that adds a files[] entry there (blanks before every
+# comma) must be refused like any unsigned change, and so must one with a second "sig" field or a NUL
+# byte. The stub verifier accepts only the message of the genuine manifest, so the canonical form is
+# what is tested, in any shell.
+t_vdlu_sig_cut_injection() {
+    vdlu_setup
+    vdlu_tree "$W/v1" 1; (cd "$W/v1" && tar -cf - .) | (cd "$MD" && tar -xf -)
+    vdlu_tree "$W/v2" 2; vfeed "$W/v2" "$W/feed" 2
+    SEEN_MSG=$W/genuine.msg sh "$MD/vdlu/vdlu-verify" "$W/feed/manifest.json" "$MD/vdlu/keyring" 2>/dev/null \
+        || { fail "genuine manifest refused"; return 1; }
+    ACCEPT_ONLY=$W/genuine.msg; export ACCEPT_ONLY
+    cp "$W/feed/manifest.json" "$W/genuine.json"
+    echo evil > "$W/evil"; _h=$(sha256sum "$W/evil" | cut -d' ' -f1); cp "$W/evil" "$W/feed/blobs/$_h"
+    _inj=" ,\"files\":[{\"class\":\"live\" ,\"enc\":\"raw\" ,\"mode\":\"0644\" ,\"path\":\"a.txt\" ,\"sha256\":\"$_h\" ,\"size\":5}] ,\"zz\":\"q"
+    sed "s|\"sig\":\"$VSIG\"|\"sig\":\"$VSIG\"$_inj\"|" "$W/genuine.json" > "$W/feed/manifest.json"
+    grep -q '"zz":"q",' "$W/feed/manifest.json" || { fail "fixture not built"; return 1; }
+    out=$(veng run 2>&1); rc=$?
+    [ "$rc" != 0 ] || { fail "manifest with unsigned files[] accepted: $out"; return 1; }
+    expect_eq "$(cat "$MD/a.txt")" "a 1" || return 1
+    sed "s|\"sig\":\"$VSIG\",|\"sig\":\"$VSIG\",\"sig\":\"$VSIG\",|" "$W/genuine.json" > "$W/feed/manifest.json"
+    out=$(sh "$MD/vdlu/vdlu-verify" "$W/feed/manifest.json" "$MD/vdlu/keyring" 2>&1) && { fail "second sig field accepted"; return 1; }
+    { cut -c1-9 "$W/genuine.json" | tr -d '\n'; printf '\000'; cut -c10- "$W/genuine.json"; } > "$W/feed/manifest.json"
+    out=$(sh "$MD/vdlu/vdlu-verify" "$W/feed/manifest.json" "$MD/vdlu/keyring" 2>&1) && { fail "manifest with a NUL byte accepted"; return 1; }
+    cp "$W/genuine.json" "$W/feed/manifest.json"
+    out=$(veng run 2>&1); rc=$?
+    expect_eq "$rc" 0 || { fail "genuine manifest refused: $out"; return 1; }
+    expect_eq "$(cat "$MD/a.txt")" "a 2"
+}
 # F12: scripts/build-bundles.sh fetch() must not reuse a partial download as a cached tarball
 t_build_fetch_partial() {
     sed -n '/^fetch() {/,/^}/p' "$REPO/scripts/build-bundles.sh" > "$W/fetch.sh"
@@ -1517,7 +1546,7 @@ PY
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_add_key_commented t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_bfu_move_failure_reported t_bfu_rename_failure_reported t_bfu_move_odd_names t_bfu_switch_nothing_to_move t_bfu_stale_temp_ignored t_webui_status t_webui_verbs_exit_zero
 t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_freezer_escape t_freezer_escape_not_writable t_freezer_escape_uid_layout t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
-t_service_disabled t_customize t_uninstall t_sha256_gate t_gen_sha256_failure t_build_zip_sha256 t_build_zip_reproducible t_build_zip_vdlu_shipped t_customize_vdlu_migrates t_vdlu_engine_applies_feed t_vdlu_engine_signed_feed t_build_fetch_partial t_build_fetch_pinned t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_build_kills_build_user t_workflow_builds_dispatched_commit t_ci_validate_json t_ci_parity_failure t_preflight_docnav_count t_preflight_release_pat t_repack_baseline_modes t_version_bump_atomic t_gen_update_json_checks t_wiki_sync_paths"
+t_service_disabled t_customize t_uninstall t_sha256_gate t_gen_sha256_failure t_build_zip_sha256 t_build_zip_reproducible t_build_zip_vdlu_shipped t_customize_vdlu_migrates t_vdlu_engine_applies_feed t_vdlu_engine_signed_feed t_vdlu_sig_cut_injection t_build_fetch_partial t_build_fetch_pinned t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_build_kills_build_user t_workflow_builds_dispatched_commit t_ci_validate_json t_ci_parity_failure t_preflight_docnav_count t_preflight_release_pat t_repack_baseline_modes t_version_bump_atomic t_gen_update_json_checks t_wiki_sync_paths"
 
 for c in $CASES; do run_case "$c"; done
 echo "summary: pass=$PASS fail=$FAIL skip=$SKIP${FAILED:+ failed:$FAILED}"

@@ -80,12 +80,22 @@ MAX_MANIFEST_BYTES=2097152
 msz=$(wc -c <"$manifest" 2>/dev/null || echo 0)
 [ "${msz:-0}" -le "$MAX_MANIFEST_BYTES" ] || { echo "vdlu-verify: manifest too large ($msz)" >&2; exit 1; }
 
+# The signature covers the text with "sig":"<sig>", cut out, up to the first '",' after it, while the
+# engine parses the whole file. Anything else in that cut (e.g. '<sig>" ,"files":[...] ,"x":"y",')
+# would be parsed but not signed, and NUL bytes are dropped by $(cat) but read by the engine's awk.
+# So the manifest must have no NUL byte, one "sig" field, and only the base64 signature in the cut.
+[ "$(tr -d '\000' <"$manifest" | wc -c)" -eq "$msz" ] || { echo "vdlu-verify: NUL byte in manifest" >&2; exit 1; }
 c=$(cat "$manifest")
+case "$c" in *'"sig":"'*'"sig":"'*) echo "vdlu-verify: more than one sig field" >&2; exit 1;; esac
+_cut=${c#*\"sig\":\"}
+_cut=${_cut%%\",*}
 
 key_id=$(field "$c" key_id) || { echo "vdlu-verify: no key_id in manifest" >&2; exit 1; }
 sig=$(field "$c" sig) || { echo "vdlu-verify: no sig in manifest" >&2; exit 1; }
 [ -n "$key_id" ] || { echo "vdlu-verify: empty key_id" >&2; exit 1; }
 [ -n "$sig" ] || { echo "vdlu-verify: empty sig (unsigned manifest)" >&2; exit 1; }
+case "$_cut" in *[!A-Za-z0-9+/=]*) echo "vdlu-verify: unsigned text next to the signature" >&2; exit 1;; esac
+[ "$_cut" = "$sig" ] || { echo "vdlu-verify: unsigned text next to the signature" >&2; exit 1; }
 
 case "$key_id" in */*|..|.|*'"'*) echo "vdlu-verify: unsafe key_id: $key_id" >&2; exit 1;; esac
 
