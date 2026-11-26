@@ -6,6 +6,13 @@ name: module-release
 on:
   workflow_dispatch:
 
+# one release run at a time: a second dispatch queues behind a running one instead of releasing the
+# same versionCode next to it (Forgejo honours this best-effort; module-ci.sh also reads the last
+# release from main's tip and from the forge's release list)
+concurrency:
+  group: module-release
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: kernelsu-ci
