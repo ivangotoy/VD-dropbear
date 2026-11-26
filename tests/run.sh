@@ -44,7 +44,8 @@ setup() {
     W=$(mktemp -d "$BASE/case.XXXXXX")
     MOD=$W/mod ROOT=$W/root STUB=$W/stub FAKE=$W/fake
     mkdir -p "$MOD" "$ROOT/data/adb" "$ROOT/data/misc_ce/0" "$ROOT/dev" "$STUB" "$FAKE"
-    # module copy as shipped by the fork build: no vdlu/, no webroot/vdlu.*, own stub binaries
+    # module copy without the VDLU updater (vdlu/, webroot/vdlu.*: their own cases below, so service.sh
+    # starts no update run here) and with its own stub binaries
     (cd "$REPO/module" && tar -cf - --exclude=./bin --exclude=./vdlu --exclude=./webroot/vdlu.js \
         --exclude=./webroot/vdlu.css .) | (cd "$MOD" && tar -xf -)
     mkdir -p "$MOD/bin/x86_64"
@@ -846,14 +847,15 @@ EOF
     [ "$rc" != 0 ] || fail "a failed hash exited 0: $(tr '\n' ' ' < "$W/out")"
 }
 # build_zip <outdir> [touch -t stamp]: the real build() from .forgejo/module-ci.conf, run by bash as
-# module-ci.sh build-user runs it, on a tar copy of the files it reads (all given that mtime when a
-# stamp is passed); the zip lands in <outdir>/module.zip
+# module-ci.sh build-user runs it (forge https://forge.invalid, repo example/VD-dropbear), on a tar
+# copy of the files it reads (all given that mtime when a stamp is passed); the zip lands in
+# <outdir>/module.zip
 build_zip() {
     rm -rf "$W/src"; mkdir -p "$W/src" "$1"
-    (cd "$REPO" && tar -cf - module LICENSE NOTICE THIRD-PARTY-NOTICES.md .forgejo/module-ci.conf \
+    (cd "$REPO" && tar -cf - module LICENSE NOTICE THIRD-PARTY-NOTICES.md .forgejo/module-ci.conf .forgejo/vdlu \
         .github/scripts/gen-sha256.sh) | (cd "$W/src" && tar -xf -)
     [ -z "${2:-}" ] || find "$W/src" -exec touch -t "$2" {} +
-    (cd "$W/src" && OUT=$1 bash -c '. .forgejo/module-ci.conf; build') > "$W/build.log" 2>&1 \
+    (cd "$W/src" && OUT=$1 SERVER_URL=https://forge.invalid REPOSITORY=example/VD-dropbear bash -c '. .forgejo/module-ci.conf; build') > "$W/build.log" 2>&1 \
         || { fail "build(): $(tail -n 2 "$W/build.log" | tr '\n' ' ')"; return 1; }
 }
 # F36: the fork zip carries a .sha256 companion for every file and none without its file, so
@@ -863,10 +865,6 @@ t_build_zip_sha256() {
     build_zip "$W/out" || return 1
     mkdir -p "$W/flash"; (cd "$W/flash" && unzip -q "$W/out/module.zip") || { fail "unzip failed"; return 1; }
     (cd "$W/flash" && find . -type f | sed 's|^\./||') > "$W/files"
-    # the VDLU updater stays out of the fork zip (module-ci.conf removes it before hashing)
-    if grep -E '^(vdlu/|webroot/vdlu\.)' "$W/files" > "$W/vdlu"; then
-        fail "zip holds VDLU files: $(tr '\n' ' ' < "$W/vdlu")"; return 1
-    fi
     grep -v '\.sha256$' "$W/files" | sed 's/$/.sha256/' | sort > "$W/want"
     grep '\.sha256$' "$W/files" | sort > "$W/have"
     [ -s "$W/want" ] || { fail "empty zip"; return 1; }
@@ -887,19 +885,51 @@ t_build_zip_reproducible() {
     (TZ=EST5; export TZ; build_zip "$W/out2" 200001020304.05) || return 1
     cmp -s "$W/out1/module.zip" "$W/out2/module.zip" || fail "zip bytes differ between two builds of one tree"
 }
-# F4: the fork zip's WebUI page has no Updates tab (its VDLU panel is not shipped) and loads no
-# vdlu.js/vdlu.css; the other tabs stay. Needs bash, python3, zip, unzip (else SKIP).
-t_build_zip_no_updates_tab() {
+# The fork zip ships the VDLU updater fed only from this forge: engine, verifier binaries (as in
+# vdlu/verify/PROVENANCE.json), the WebUI panel and its Updates tab, customize.sh's VDLU lines; the
+# keyring holds only the owner's key, config.default points at this forge's feed with that key id
+# pinned, and every ABI gets the static curl the engine fetches with (no tools download).
+# Needs bash, python3, zip, unzip (else SKIP).
+t_build_zip_vdlu_shipped() {
     for _t in bash python3 zip unzip; do command -v "$_t" >/dev/null 2>&1 || return 77; done
     build_zip "$W/out" || return 1
-    h=$(unzip -p "$W/out/module.zip" webroot/index.html) || { fail "no webroot/index.html"; return 1; }
-    for _x in 'data-tab="updates"' 'id="tab-updates"' 'src="vdlu.js"' 'href="vdlu.css"'; do
-        expect_not "$h" "$_x" || return 1
+    z=$W/out/module.zip; unzip -Z1 "$z" > "$W/list"
+    for _f in vdlu/update.sh vdlu/vdlu-verify vdlu/config.default vdlu/verify/PROVENANCE.json webroot/vdlu.js webroot/vdlu.css \
+        vdlu/keyring/ivangotoy-2026.pub licenses/curl-NOTICE; do
+        grep -qx "$_f" "$W/list" || { fail "zip lacks $_f"; return 1; }
     done
-    for _x in 'data-tab="status"' 'data-tab="settings"' 'data-tab="keys"' 'data-tab="pw"' 'id="tab-pw"'; do
+    expect_eq "$(grep '^vdlu/keyring/.*\.pub$' "$W/list")" vdlu/keyring/ivangotoy-2026.pub || return 1
+    grep -q 'baseline\.json' "$W/list" && { fail "build() zip holds upstream's baseline.json"; return 1; }
+    mkdir -p "$W/x"; (cd "$W/x" && unzip -q "$z") || { fail "unzip"; return 1; }
+    cmp -s "$W/x/vdlu/keyring/ivangotoy-2026.pub" "$REPO/.forgejo/vdlu/ivangotoy-2026.pub" || { fail "keyring key differs"; return 1; }
+    python3 -I - "$W/x" "$z" "$REPO" > "$W/py" 2>&1 <<'PY' || { fail "$(tr '\n' ' ' < "$W/py")"; return 1; }
+import hashlib, json, os, sys, zipfile
+x, z, repo = sys.argv[1:]
+zi = {i.filename: i for i in zipfile.ZipFile(z).infolist()}
+v = json.load(open(os.path.join(x, "vdlu/verify/PROVENANCE.json")))
+for abi, m in v["binaries"].items():
+    p = f"vdlu/verify/{abi}/ed25519-mini"
+    assert hashlib.sha256(open(os.path.join(x, p), "rb").read()).hexdigest() == m["sha256"], p
+c = json.load(open(os.path.join(repo, ".forgejo/vdlu/PROVENANCE.json")))["files"]
+for abi in ("arm64-v8a", "armeabi-v7a", "x86", "x86_64"):
+    p = f"bin/{abi}/curl"
+    assert hashlib.sha256(open(os.path.join(x, p), "rb").read()).hexdigest() == c[f"curl/{abi}/curl"]["sha256"], p
+    assert (zi[p].external_attr >> 16) & 0o777 == 0o755, p + " mode"
+PY
+    c=$(cat "$W/x/vdlu/config.default")
+    expect_has "$c" "
+source=https://forge.invalid/example/VD-dropbear/raw/branch/main/.forgejo/vdlu-feed
+" || return 1
+    expect_eq "$(grep -c '^source=' "$W/x/vdlu/config.default")" 1 || return 1
+    expect_eq "$(grep '^key_id=' "$W/x/vdlu/config.default")" key_id=ivangotoy-2026 || return 1
+    expect_eq "$(grep '^profile=' "$W/x/vdlu/config.default")" profile=hardened || return 1
+    grep -q -i -E 'github|tools_source' "$W/x/vdlu/config.default" && { fail "config.default names an upstream feed"; return 1; }
+    grep -q '^set_perm "\$MODPATH/vdlu/update.sh"' "$W/x/customize.sh" || { fail "customize.sh lost its VDLU lines"; return 1; }
+    grep -q 'VDLU flashless updater' "$W/x/customize.sh" || { fail "customize.sh lost its VDLU seed block"; return 1; }
+    h=$(cat "$W/x/webroot/index.html")
+    for _x in 'data-tab="updates"' 'id="tab-updates"' 'src="vdlu.js"' 'href="vdlu.css"' 'data-tab="status"' 'data-tab="pw"'; do
         expect_has "$h" "$_x" || return 1
     done
-    grep -q 'Updates tab removed' "$W/build.log" || fail "strip not logged"
 }
 # F12: scripts/build-bundles.sh fetch() must not reuse a partial download as a cached tarball
 t_build_fetch_partial() {
@@ -1368,7 +1398,7 @@ PY
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_add_key_commented t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_bfu_move_failure_reported t_bfu_rename_failure_reported t_bfu_move_odd_names t_bfu_switch_nothing_to_move t_bfu_stale_temp_ignored t_webui_status t_webui_verbs_exit_zero
 t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_freezer_escape t_freezer_escape_not_writable t_freezer_escape_uid_layout t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
-t_service_disabled t_customize t_uninstall t_sha256_gate t_gen_sha256_failure t_build_zip_sha256 t_build_zip_reproducible t_build_zip_no_updates_tab t_build_fetch_partial t_build_fetch_pinned t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_build_kills_build_user t_workflow_builds_dispatched_commit t_ci_validate_json t_ci_parity_failure t_preflight_docnav_count t_preflight_release_pat t_repack_baseline_modes t_version_bump_atomic t_gen_update_json_checks t_wiki_sync_paths"
+t_service_disabled t_customize t_uninstall t_sha256_gate t_gen_sha256_failure t_build_zip_sha256 t_build_zip_reproducible t_build_zip_vdlu_shipped t_build_fetch_partial t_build_fetch_pinned t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_build_kills_build_user t_workflow_builds_dispatched_commit t_ci_validate_json t_ci_parity_failure t_preflight_docnav_count t_preflight_release_pat t_repack_baseline_modes t_version_bump_atomic t_gen_update_json_checks t_wiki_sync_paths"
 
 for c in $CASES; do run_case "$c"; done
 echo "summary: pass=$PASS fail=$FAIL skip=$SKIP${FAILED:+ failed:$FAILED}"

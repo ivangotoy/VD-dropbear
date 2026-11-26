@@ -1,0 +1,20 @@
+{
+  "purpose": "Fork-only VDLU material for the Forgejo build: the owner's update-signing public key, and files vendored verbatim from VDLiveUpdate. build() (module-ci.conf) ships the key as the only keyring entry and the curl binaries as module/bin/<abi>/curl.",
+  "why_vendored": "The build, the release step and the offline tests must use the same bytes; the tests and the gate run without network, and every build needs the curl binaries.",
+  "source": {
+    "repository": "https://github.com/VD171/VDLiveUpdate",
+    "commit": "23c27ad49f4b79e678be9237cb43884da26c38be",
+    "license": "Apache-2.0 (LICENSE in this directory, VDLiveUpdate's copy); curl: curl license; Mbed TLS: Apache-2.0 (curl/NOTICE)"
+  },
+  "files": {
+    "curl/arm64-v8a/curl": {"from": "tools/curl/arm64-v8a/curl", "sha256": "c0b0721287ef3bd56c6b76f2f257a505434a498cccab502cf7f9ce79750486b8"},
+    "curl/armeabi-v7a/curl": {"from": "tools/curl/armeabi-v7a/curl", "sha256": "1f7c2c88274e8d0e09edb673fcd189fb21b844f55723ff634766161b7e20158c"},
+    "curl/x86/curl": {"from": "tools/curl/x86/curl", "sha256": "c03ff24ead70e2a7d976a2fbcbc70d1ad356c28cd23433326988f224b7309765"},
+    "curl/x86_64/curl": {"from": "tools/curl/x86_64/curl", "sha256": "0330fcb6c1e7dfb3f87b2ad13a7f17da1b5a57c794152bd36f45dea7497b6f1f"},
+    "LICENSE": {"from": "LICENSE", "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"}
+  },
+  "curl_build": "curl 8.11.1 + Mbed TLS 3.6.7 (static), NDK r29, api 28; sources, tarball hashes and build script: tools/curl/PROVENANCE.json and tools/curl/build.sh at the commit above",
+  "keys": {
+    "ivangotoy-2026.pub": {"key_id": "ivangotoy-2026", "format": "raw 32-byte ed25519 public key", "sha256": "bc8b440168d3fde615d230378e20a86dc11d3039c88b624019e7c108a553ac2d"}
+  }
+}

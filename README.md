@@ -228,10 +228,12 @@ VD Dropbear runs entirely on your device.
 
 ## Builds from this repository
 
-Releases published here are built by `.forgejo/module-ci.sh` from this repository merged with upstream. They
-leave out the VDLU updater described above (`vdlu/`, `webroot/vdlu.*` and its install lines in `customize.sh`),
-and the WebUI's Updates tab; updates come through the root manager's update check (`updateJson`
-points at this repository's `.forgejo/update.json`).
+Releases published here are built by `.forgejo/module-ci.sh` from this repository merged with upstream. The
+root manager's update check reads this repository's `.forgejo/update.json` (`updateJson`). The VDLU updater
+described above ships too, fed only from this repository: its keyring holds only this fork's key
+(`ivangotoy-2026`, `.forgejo/vdlu/`), its `source` is
+`https://git.digtvbg.com/ivangotoy/VD-dropbear/raw/branch/main/.forgejo/vdlu-feed`, and the zip carries the
+static `curl` it fetches with (`bin/<abi>/curl`, from VDLiveUpdate); it never fetches upstream's feed.
 
 ## More KernelSU modules
 
