@@ -925,10 +925,51 @@ source=https://forge.invalid/example/VD-dropbear/raw/branch/main/.forgejo/vdlu-f
     grep -q -i -E 'github|tools_source' "$W/x/vdlu/config.default" && { fail "config.default names an upstream feed"; return 1; }
     grep -q '^set_perm "\$MODPATH/vdlu/update.sh"' "$W/x/customize.sh" || { fail "customize.sh lost its VDLU lines"; return 1; }
     grep -q 'VDLU flashless updater' "$W/x/customize.sh" || { fail "customize.sh lost its VDLU seed block"; return 1; }
+    expect_eq "$(grep -c '^# fork: VDLU feed and key on every flash' "$W/x/customize.sh")" 1 || return 1
     h=$(cat "$W/x/webroot/index.html")
     for _x in 'data-tab="updates"' 'id="tab-updates"' 'src="vdlu.js"' 'href="vdlu.css"' 'data-tab="status"' 'data-tab="pw"'; do
         expect_has "$h" "$_x" || return 1
     done
+}
+# G4: flashing the fork zip over an install whose VDLU config and state came from another feed
+# (upstream's: its source, key id, trusted profile, tools feed) leaves only this forge's feed and key:
+# source/key_id from the zip's config.default, profile hardened, tools_source/pubkey_dir gone (also
+# written with blanks around '=', which the WebUI still reads), the user's other keys kept; the
+# pending transaction, the adopted curl and current.json go, current.json restarts from the zip's
+# baseline.json; blobs stay. An install with no VDLU state (fork ci15) is seeded. The module copy
+# gets vdlu/ with a config.default as build() writes it and customize.sh with the fork fragment
+# build() appends (t_build_zip_vdlu_shipped checks the zip has it). Made-up values.
+flash_mod() { (MODPATH=$MOD; ui_print() { echo "$1"; }; grep_prop() { sed -n "s/^$1=//p" "$2"; }
+    set_perm() { :; }; set_perm_recursive() { :; }; . "$MOD/customize.sh") 2>&1; }
+t_customize_vdlu_migrates() {
+    cp -R "$REPO/module/vdlu" "$MOD/vdlu"
+    printf '%s\n' profile=hardened source=https://forge.invalid/example/VD-dropbear/raw/branch/main/.forgejo/vdlu-feed \
+        channel=stable auto_on_reboot=1 pubkey_dir=keyring key_id=ivangotoy-2026 > "$MOD/vdlu/config.default"
+    echo '{"version":10099}' > "$MOD/vdlu/baseline.json"
+    grep -q '^# fork: VDLU feed and key on every flash' "$MOD/customize.sh" || cat "$REPO/.forgejo/vdlu/customize-fork.sh" >> "$MOD/customize.sh"
+    rm -f "$MOD/customize.sh.sha256"; find "$MOD/vdlu" -name '*.sha256' -exec rm -f {} +   # a built tree's companions
+    out=$(flash_mod); rc=$?
+    expect_eq "$rc" 0 || { fail "$out"; return 1; }
+    V=$DATA/vdlu
+    expect_eq "$(sort "$V/config" | tr '\n' ' ')" "auto_on_reboot=1 channel=stable key_id=ivangotoy-2026 profile=hardened source=https://forge.invalid/example/VD-dropbear/raw/branch/main/.forgejo/vdlu-feed " || return 1
+    expect_eq "$(cat "$V/current.json")" '{"version":10099}' || return 1
+    printf '%s\n' profile=trusted source=https://feed.example.invalid/VD-dropbear channel=stable auto_on_reboot=0 \
+        auto_on_webui_open=0 pubkey_dir=keyring2 net_policy=wifi key_id=other-2026 \
+        ' tools_source = https://feed.example.invalid/vdlu-tools' boot_retry_minutes=7 > "$V/config"
+    mkdir -p "$V/staged/bin" "$V/tools/x86_64" "$V/blobs" "$V/.work"
+    for _f in target.json plan.tsv plan.del journal.json cancel staged/bin/x tools/x86_64/curl blobs/ab current.json; do echo old > "$V/$_f"; done
+    out=$(flash_mod); rc=$?
+    expect_eq "$rc" 0 || { fail "$out"; return 1; }
+    expect_eq "$(sort "$V/config" | tr '\n' ' ')" "auto_on_reboot=0 auto_on_webui_open=0 boot_retry_minutes=7 channel=stable key_id=ivangotoy-2026 net_policy=wifi profile=hardened source=https://forge.invalid/example/VD-dropbear/raw/branch/main/.forgejo/vdlu-feed " || return 1
+    for _f in target.json plan.tsv plan.del journal.json cancel staged tools .work; do
+        [ -e "$V/$_f" ] && { fail "$_f kept"; return 1; }
+    done
+    expect_eq "$(cat "$V/blobs/ab")" old || return 1
+    expect_eq "$(cat "$V/current.json")" '{"version":10099}' || return 1
+    rm "$MOD/vdlu/baseline.json"; echo old > "$V/current.json"
+    out=$(flash_mod); rc=$?
+    expect_eq "$rc" 0 || { fail "$out"; return 1; }
+    [ ! -e "$V/current.json" ] || fail "current.json kept without a baseline"
 }
 # F12: scripts/build-bundles.sh fetch() must not reuse a partial download as a cached tarball
 t_build_fetch_partial() {
@@ -1397,7 +1438,7 @@ PY
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_add_key_commented t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_bfu_move_failure_reported t_bfu_rename_failure_reported t_bfu_move_odd_names t_bfu_switch_nothing_to_move t_bfu_stale_temp_ignored t_webui_status t_webui_verbs_exit_zero
 t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_freezer_escape t_freezer_escape_not_writable t_freezer_escape_uid_layout t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
-t_service_disabled t_customize t_uninstall t_sha256_gate t_gen_sha256_failure t_build_zip_sha256 t_build_zip_reproducible t_build_zip_vdlu_shipped t_build_fetch_partial t_build_fetch_pinned t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_build_kills_build_user t_workflow_builds_dispatched_commit t_ci_validate_json t_ci_parity_failure t_preflight_docnav_count t_preflight_release_pat t_repack_baseline_modes t_version_bump_atomic t_gen_update_json_checks t_wiki_sync_paths"
+t_service_disabled t_customize t_uninstall t_sha256_gate t_gen_sha256_failure t_build_zip_sha256 t_build_zip_reproducible t_build_zip_vdlu_shipped t_customize_vdlu_migrates t_build_fetch_partial t_build_fetch_pinned t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_build_kills_build_user t_workflow_builds_dispatched_commit t_ci_validate_json t_ci_parity_failure t_preflight_docnav_count t_preflight_release_pat t_repack_baseline_modes t_version_bump_atomic t_gen_update_json_checks t_wiki_sync_paths"
 
 for c in $CASES; do run_case "$c"; done
 echo "summary: pass=$PASS fail=$FAIL skip=$SKIP${FAILED:+ failed:$FAILED}"
