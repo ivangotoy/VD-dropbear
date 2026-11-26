@@ -1335,6 +1335,52 @@ t_vdlu_downgrade_without_current() {
     expect_has "$out" "downgrade blocked (3 < 5)" || return 1
     expect_eq "$(cat "$MD/a.txt")" "a 5"
 }
+# V13/G3: over an https source the engine fetches with the curl the zip ships in bin/<abi>/ (found on
+# its own PATH, as the zip has no other): the stub there records each call and serves the local feed.
+t_vdlu_engine_https_bundled_curl() {
+    vdlu_setup
+    vdlu_tree "$W/v1" 1; (cd "$W/v1" && tar -cf - .) | (cd "$MD" && tar -xf -)
+    vdlu_tree "$W/v2" 2; vfeed "$W/v2" "$W/feed" 2
+    mkdir -p "$MD/bin/x86_64"
+    cat > "$MD/bin/x86_64/curl" <<EOF
+#!/bin/sh
+o=""; u=""; p=""
+for a in "\$@"; do [ "\$p" = -o ] && o=\$a; p=\$a; u=\$a; done
+echo "\$u" >> "$W/curl.log"
+cp "$W/feed/\${u#https://feed.example.invalid/f/}" "\$o"
+EOF
+    chmod 755 "$MD/bin/x86_64/curl"
+    printf '#!/bin/sh\necho "1.1.1.1 via 192.0.2.1 dev wlan0 src 192.0.2.5"\n' > "$STUB/ip"; chmod 755 "$STUB/ip"
+    sed -i 's|^source=.*|source=https://feed.example.invalid/f|' "$VD/config"
+    out=$(veng run 2>&1); rc=$?
+    expect_eq "$rc" 0 || { fail "$out"; return 1; }
+    expect_eq "$(head -n 1 "$W/curl.log")" https://feed.example.invalid/f/manifest.json || return 1
+    expect_eq "$(cat "$MD/a.txt")" "a 2"
+}
+# G3: the WebUI downloads a curl (from a tools feed) only when its probe finds none: with the zip's
+# bin/<abi>/curl in place the probe (run by sh, PATH without curl) answers yes and nothing is
+# downloaded; without it the download would start. Page JS cut from vdlu.js. Needs node.
+t_vdlu_webui_no_tools_download() {
+    node -e "" >/dev/null 2>&1 || return 77
+    vdlu_js "$W/tc.js" '/^  function T(k)/p; /^  function q(s)/p; /^  var _abi = null;/p; /^  function curAbi() {/,/^  }/p;
+        /^  function readConfig() {/,/^  }/p; /^  function ensureToolchain() {/,/^  }/p'
+    cat >> "$W/tc.js" <<'JS'
+var cp = require('child_process'), BOOT = [];
+C.moduleDir = process.argv[2]; C.vdluDir = process.argv[3];
+function bootstrapTool(abi) { BOOT.push(abi); return Promise.resolve(true); }
+ex = function (cmd) {
+  if (/^getprop /.test(cmd)) return Promise.resolve('x86_64\n');
+  if (/^cat '/.test(cmd)) return Promise.resolve('source=https://feed.example.invalid/f\n');
+  return Promise.resolve(cp.execSync(cmd, { shell: '/bin/sh', env: { PATH: '/nonexistent' } }).toString());
+};
+ensureToolchain().then(function () { console.log(BOOT.length ? 'download' : 'none'); });
+JS
+    mkdir -p "$W/m/bin/x86_64" "$W/v"
+    printf '#!/bin/sh\n' > "$W/m/bin/x86_64/curl"; chmod 755 "$W/m/bin/x86_64/curl"
+    expect_eq "$(node "$W/tc.js" "$W/m" "$W/v")" none || return 1
+    rm "$W/m/bin/x86_64/curl"
+    expect_eq "$(node "$W/tc.js" "$W/m" "$W/v")" download
+}
 # F12: scripts/build-bundles.sh fetch() must not reuse a partial download as a cached tarball
 t_build_fetch_partial() {
     sed -n '/^fetch() {/,/^}/p' "$REPO/scripts/build-bundles.sh" > "$W/fetch.sh"
@@ -1633,6 +1679,12 @@ t_vdlu_release_feed_updates_device() {
     git --git-dir="$RD/forge/owner/repo.git" archive main .forgejo/vdlu-feed | tar -x -C "$W/fN1x"
     FN1=$W/fN1x/.forgejo/vdlu-feed
     expect_eq "$(sed -n 's/.*"delete":\[\([^]]*\)\].*/\1/p' "$FN1/manifest.json")" '"common/extra-n.txt"' || return 1
+    # the feed holds exactly the blobs N+1's manifest names: extra-n.txt's went with N
+    _xh=$(printf 'only in N\n' | sha256sum | cut -d' ' -f1)
+    ls "$W/fN/blobs" | grep -q "^$_xh" || { fail "feed N lacks extra-n.txt's blob"; return 1; }
+    ls "$FN1/blobs" | grep -q "^$_xh" && { fail "feed N+1 kept extra-n.txt's blob"; return 1; }
+    expect_eq "$(ls "$FN1/blobs" | sed 's/\.gz$//' | sort -u | tr '\n' ' ')" \
+        "$(grep -o '"sha256":"[0-9a-f]*"' "$FN1/manifest.json" | cut -d'"' -f4 | sort -u | tr '\n' ' ')" || return 1
     (cd "$W/n1" && unzip -q "$W/N1.zip") || { fail "unzip N+1"; return 1; }
     MOD=$W/dev; mkdir -p "$MOD"; (cd "$MOD" && unzip -q "$W/N.zip") || { fail "unzip N"; return 1; }
     out=$(flash_mod); rc=$?
@@ -1911,7 +1963,7 @@ PY
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_add_key_commented t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_bfu_move_failure_reported t_bfu_rename_failure_reported t_bfu_move_odd_names t_bfu_switch_nothing_to_move t_bfu_stale_temp_ignored t_webui_status t_webui_verbs_exit_zero
 t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_freezer_escape t_freezer_escape_not_writable t_freezer_escape_uid_layout t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
-t_service_disabled t_customize t_uninstall t_sha256_gate t_gen_sha256_failure t_build_zip_sha256 t_build_zip_reproducible t_build_zip_vdlu_shipped t_customize_vdlu_migrates t_vdlu_engine_applies_feed t_vdlu_engine_signed_feed t_vdlu_sig_cut_injection t_vdlu_ca_bundle_replaced t_vdlu_lock_fresh_not_stolen t_vdlu_diff_failure_journal t_vdlu_pruned_target_recovers t_vdlu_fetched_target_applies_offline t_vdlu_stale_cancel_cleared t_vdlu_engine_refuses_bad_feeds t_vdlu_webui_config_safe t_vdlu_webui_toast_info_cleared t_vdlu_webui_late_cancel_removed t_vdlu_lock_from_earlier_boot t_vdlu_downgrade_without_current t_build_fetch_partial t_build_fetch_pinned t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_release_version_code_above_published t_release_vdlu_key_required t_vdlu_release_feed_updates_device t_build_kills_build_user t_workflow_builds_dispatched_commit t_ci_validate_json t_ci_parity_failure t_preflight_docnav_count t_preflight_release_pat t_repack_baseline_modes t_version_bump_atomic t_gen_update_json_checks t_wiki_sync_paths"
+t_service_disabled t_customize t_uninstall t_sha256_gate t_gen_sha256_failure t_build_zip_sha256 t_build_zip_reproducible t_build_zip_vdlu_shipped t_customize_vdlu_migrates t_vdlu_engine_applies_feed t_vdlu_engine_signed_feed t_vdlu_sig_cut_injection t_vdlu_ca_bundle_replaced t_vdlu_lock_fresh_not_stolen t_vdlu_diff_failure_journal t_vdlu_pruned_target_recovers t_vdlu_fetched_target_applies_offline t_vdlu_stale_cancel_cleared t_vdlu_engine_refuses_bad_feeds t_vdlu_webui_config_safe t_vdlu_webui_toast_info_cleared t_vdlu_webui_late_cancel_removed t_vdlu_lock_from_earlier_boot t_vdlu_downgrade_without_current t_vdlu_engine_https_bundled_curl t_vdlu_webui_no_tools_download t_build_fetch_partial t_build_fetch_pinned t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_release_version_code_above_published t_release_vdlu_key_required t_vdlu_release_feed_updates_device t_build_kills_build_user t_workflow_builds_dispatched_commit t_ci_validate_json t_ci_parity_failure t_preflight_docnav_count t_preflight_release_pat t_repack_baseline_modes t_version_bump_atomic t_gen_update_json_checks t_wiki_sync_paths"
 
 for c in $CASES; do run_case "$c"; done
 echo "summary: pass=$PASS fail=$FAIL skip=$SKIP${FAILED:+ failed:$FAILED}"
