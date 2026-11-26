@@ -1,0 +1,12 @@
+#!/bin/sh
+# ed25519-verify <pubkey32> <msg> <sig64>: the CLI and exit codes of vdlu/verify/<abi>/ed25519-mini
+# (0 = valid, 1 = invalid, 2 = usage/IO) on openssl, for a host or CI runner, where the bionic-linked
+# ed25519-mini cannot run. Fork-only; never shipped in the module zip.
+[ "$#" -eq 3 ] && [ -f "$1" ] && [ -f "$2" ] && [ -f "$3" ] || exit 2
+[ "$(wc -c < "$1")" -eq 32 ] && [ "$(wc -c < "$3")" -eq 64 ] || exit 2
+d=$(mktemp -d "${TMPDIR:-/tmp}/ed25519-verify.XXXXXX") || exit 2
+trap 'rm -rf "$d"' EXIT
+# SubjectPublicKeyInfo DER of an ed25519 key: fixed 12-byte prefix + the raw 32-byte key
+{ printf '\060\052\060\005\006\003\053\145\160\003\041\000'; cat "$1"; } > "$d/pub.der"
+openssl pkeyutl -verify -pubin -keyform DER -inkey "$d/pub.der" -rawin -in "$2" -sigfile "$3" >/dev/null 2>&1 && exit 0
+exit 1

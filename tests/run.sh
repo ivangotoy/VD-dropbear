@@ -971,6 +971,85 @@ t_customize_vdlu_migrates() {
     expect_eq "$rc" 0 || { fail "$out"; return 1; }
     [ ! -e "$V/current.json" ] || fail "current.json kept without a baseline"
 }
+# --- VDLU engine (module/vdlu/update.sh, vdlu-verify) on the host ----------------
+# vdlu_setup: an installed module in $MD (module/vdlu from the tree, keyring = $W/keys/test-2026.pub)
+# with its VDLU state dir $VD (config: hardened, source file://$W/feed, key_id test-2026). The
+# bionic-linked vdlu/verify/<abi>/ed25519-mini cannot run here: vdlu-verify takes $MD/vdlu/ed25519-mini
+# first, which is either a stub that accepts every signature (VERIFIER=stub, any shell: engine logic)
+# or .forgejo/vdlu/ed25519-verify, the same CLI on openssl (VERIFIER=openssl: real signatures).
+VSIG=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+vdlu_setup() {
+    MD=$W/installed VD=$W/vd
+    mkdir -p "$MD" "$VD" "$W/keys" "$W/feed"
+    cp -R "$REPO/module/vdlu" "$MD/vdlu"; rm -f "$MD/vdlu/keyring/"* "$MD/vdlu/baseline.json"
+    if [ "${VERIFIER:-stub}" = openssl ]; then
+        cp "$REPO/.forgejo/vdlu/ed25519-verify" "$MD/vdlu/ed25519-mini"
+    else
+        printf '#!/bin/sh\n[ -n "$ACCEPT_ONLY" ] && { cmp -s "$2" "$ACCEPT_ONLY" || exit 1; }\n[ -n "$SEEN_MSG" ] && cp "$2" "$SEEN_MSG"\nexit 0\n' > "$MD/vdlu/ed25519-mini"
+        [ -f "$W/keys/test-2026.pub" ] || printf '%32s' x > "$W/keys/test-2026.pub"
+    fi
+    chmod 755 "$MD/vdlu/ed25519-mini"
+    cp "$W/keys/test-2026.pub" "$MD/vdlu/keyring/test-2026.pub"
+    printf '%s\n' profile=hardened "source=file://$W/feed" channel=stable key_id=test-2026 pubkey_dir=keyring \
+        net_policy=any > "$VD/config"
+}
+veng() { VDLU_DIR=$VD MODULE_DIR=$MD MODID=vddropbear sh "$MD/vdlu/update.sh" "$@"; }
+# vfeed <tree> <feed dir> <version> [delete path...]: manifest.json as vdlu-pack writes it (compact,
+# sorted keys; key_id test-2026, sig $VSIG) + raw blobs/<sha256> for every file of <tree> (*.sh 0755)
+vfeed() {
+    _t=$1 _f=$2 _v=$3; shift 3
+    mkdir -p "$_f/blobs"; _fl="" _sep=""
+    for _p in $(cd "$_t" && find . -type f | sed 's|^\./||' | LC_ALL=C sort); do
+        _h=$(sha256sum "$_t/$_p" | cut -d' ' -f1); _z=$(wc -c < "$_t/$_p" | tr -d ' ')
+        case "$_p" in *.sh) _m=0755 ;; *) _m=0644 ;; esac
+        cp "$_t/$_p" "$_f/blobs/$_h"
+        _fl="$_fl$_sep{\"class\":\"live\",\"enc\":\"raw\",\"mode\":\"$_m\",\"path\":\"$_p\",\"sha256\":\"$_h\",\"size\":$_z}"; _sep=,
+    done
+    _d="" _sep=""; for _p; do _d="$_d$_sep\"$_p\""; _sep=,; done
+    printf '{"built":"2026-01-01T00:00:00Z","channel":"stable","delete":[%s],"engine_min":3,"files":[%s],"key_id":"test-2026","module":"vddropbear","schema":1,"sig":"%s","version":%s,"version_name":"v%s"}\n' \
+        "$_d" "$_fl" "$VSIG" "$_v" "$_v" > "$_f/manifest.json"
+}
+# vkey <id>: a throwaway ed25519 key, $W/keys/<id>.pem and its raw 32-byte public half <id>.pub
+vkey() { mkdir -p "$W/keys"; openssl genpkey -algorithm ed25519 -out "$W/keys/$1.pem" 2>/dev/null \
+    && openssl pkey -in "$W/keys/$1.pem" -pubout -outform DER | tail -c 32 > "$W/keys/$1.pub"; }
+# vsign <manifest> <key file id> [key_id]: the vendored producer's vdlu-sign
+vsign() { TMPDIR=$W sh "$REPO/.forgejo/vdlu/vdlu-sign" "$1" "$W/keys/$2.pem" "${3:-test-2026}" 2>/dev/null; }
+# vdlu_tree <dir> <version>: a small module tree for a feed (a.txt, common/b.sh, gone.txt, module.prop)
+vdlu_tree() {
+    mkdir -p "$1/common"; echo "a $2" > "$1/a.txt"; printf '#!/bin/sh\necho b\n' > "$1/common/b.sh"
+    echo gone > "$1/gone.txt"; printf 'id=vddropbear\nversionCode=%s\n' "$2" > "$1/module.prop"
+}
+# the engine applies a feed over file:// (stub verifier, any shell): changed file written, unchanged
+# file skipped, deleted path removed, module.prop at the feed's version, journal DONE, current.json
+t_vdlu_engine_applies_feed() {
+    vdlu_setup
+    vdlu_tree "$W/v1" 1; (cd "$W/v1" && tar -cf - .) | (cd "$MD" && tar -xf -)
+    vdlu_tree "$W/v2" 2; rm "$W/v2/gone.txt"; vfeed "$W/v2" "$W/feed" 2 gone.txt
+    out=$(veng run 2>&1); rc=$?
+    expect_eq "$rc" 0 || { fail "$out"; return 1; }
+    expect_eq "$(cat "$MD/a.txt")" "a 2" || return 1
+    [ ! -e "$MD/gone.txt" ] || { fail "deleted path kept"; return 1; }
+    expect_eq "$(sed -n 's/^versionCode=//p' "$MD/module.prop")" 2 || return 1
+    expect_has "$(cat "$VD/journal.json")" '"state":"DONE"' || return 1
+    cmp -s "$VD/current.json" "$W/feed/manifest.json" || fail "current.json is not the applied manifest"
+}
+# the same with real signatures: the vendored vdlu-pack (--prev for delete[]) and vdlu-sign with a
+# throwaway key, verified by the shipped vdlu-verify through the openssl verifier. Needs python3, openssl.
+t_vdlu_engine_signed_feed() {
+    for _t in python3 openssl gzip; do command -v "$_t" >/dev/null 2>&1 || return 77; done
+    vkey test-2026 || { fail "openssl ed25519 keygen"; return 1; }
+    VERIFIER=openssl vdlu_setup
+    vdlu_tree "$W/v1" 1; (cd "$W/v1" && tar -cf - .) | (cd "$MD" && tar -xf -)
+    python3 "$REPO/.forgejo/vdlu/vdlu-pack" "$W/v1" "$W/p1" vddropbear 1 2>/dev/null || { fail "pack v1"; return 1; }
+    vdlu_tree "$W/v2" 2; rm "$W/v2/gone.txt"; head -c 9000 /dev/zero >> "$W/v2/a.txt"
+    python3 "$REPO/.forgejo/vdlu/vdlu-pack" "$W/v2" "$W/feed" vddropbear 2 --prev "$W/p1/manifest.json" 2>/dev/null || { fail "pack v2"; return 1; }
+    vsign "$W/feed/manifest.json" test-2026 || { fail "sign"; return 1; }
+    out=$(veng run 2>&1); rc=$?
+    expect_eq "$rc" 0 || { fail "$out"; return 1; }
+    expect_has "$out" "vdlu-verify: OK key_id=test-2026" || return 1
+    cmp -s "$MD/a.txt" "$W/v2/a.txt" || { fail "a.txt not updated (gz blob)"; return 1; }
+    [ ! -e "$MD/gone.txt" ] || fail "deleted path kept"
+}
 # F12: scripts/build-bundles.sh fetch() must not reuse a partial download as a cached tarball
 t_build_fetch_partial() {
     sed -n '/^fetch() {/,/^}/p' "$REPO/scripts/build-bundles.sh" > "$W/fetch.sh"
@@ -1438,7 +1517,7 @@ PY
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_add_key_commented t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_bfu_move_failure_reported t_bfu_rename_failure_reported t_bfu_move_odd_names t_bfu_switch_nothing_to_move t_bfu_stale_temp_ignored t_webui_status t_webui_verbs_exit_zero
 t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_freezer_escape t_freezer_escape_not_writable t_freezer_escape_uid_layout t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
-t_service_disabled t_customize t_uninstall t_sha256_gate t_gen_sha256_failure t_build_zip_sha256 t_build_zip_reproducible t_build_zip_vdlu_shipped t_customize_vdlu_migrates t_build_fetch_partial t_build_fetch_pinned t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_build_kills_build_user t_workflow_builds_dispatched_commit t_ci_validate_json t_ci_parity_failure t_preflight_docnav_count t_preflight_release_pat t_repack_baseline_modes t_version_bump_atomic t_gen_update_json_checks t_wiki_sync_paths"
+t_service_disabled t_customize t_uninstall t_sha256_gate t_gen_sha256_failure t_build_zip_sha256 t_build_zip_reproducible t_build_zip_vdlu_shipped t_customize_vdlu_migrates t_vdlu_engine_applies_feed t_vdlu_engine_signed_feed t_build_fetch_partial t_build_fetch_pinned t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_build_kills_build_user t_workflow_builds_dispatched_commit t_ci_validate_json t_ci_parity_failure t_preflight_docnav_count t_preflight_release_pat t_repack_baseline_modes t_version_bump_atomic t_gen_update_json_checks t_wiki_sync_paths"
 
 for c in $CASES; do run_case "$c"; done
 echo "summary: pass=$PASS fail=$FAIL skip=$SKIP${FAILED:+ failed:$FAILED}"

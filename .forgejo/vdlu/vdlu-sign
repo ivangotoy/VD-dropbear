@@ -1,0 +1,86 @@
+#!/bin/sh
+# ======================================================================
+#  VDLiveUpdate (VDLU)  ::  flashless, incremental module updates
+#  A self-update engine for KernelSU/APatch/Magisk modules.
+#
+#  Copyright (C) 2026  VD171
+#  SPDX-License-Identifier: Apache-2.0
+#
+#  Site           : https://vd171.ru
+#  Site           : https://vd.priv8.ru
+#  Source         : https://github.com/VD171/VDLiveUpdate
+#  GitHub         : @VD171 https://github.com/VD171
+#  XDA-Developers : @VD171 https://xdaforums.com/m/vd171.4699873/
+#  Telegram       : @VD_Priv8 https://t.me/VD_Priv8
+#  Channel        : @Priv8_VD https://t.me/Priv8_VD
+#  Discord        : @VD.Priv8 https://discord.com/users/1296831918989639721
+#  E-mail         : vd.priv8@pm.me
+# ======================================================================
+# vdlu-sign <manifest.json> <privkey.pem> <key_id> - sign a VDLU manifest in place.
+# Injects key_id + ed25519 signature (base64) over the sha256 of the canonical form.
+# POSIX sh + openssl. The canonical form MUST match engine/vdlu-verify byte for byte
+# (see producer/README.md "Canonicalization"). INTERFACES.md §6.
+set -eu
+
+if [ $# -ne 3 ]; then
+	echo "usage: vdlu-sign <manifest.json> <privkey.pem> <key_id>" >&2
+	exit 2
+fi
+
+manifest=$1
+priv=$2
+key_id=$3
+
+[ -f "$manifest" ] || { echo "vdlu-sign: no such manifest: $manifest" >&2; exit 2; }
+[ -f "$priv" ] || { echo "vdlu-sign: no such private key: $priv" >&2; exit 2; }
+case "$key_id" in *'"'*|'') echo "vdlu-sign: invalid key_id" >&2; exit 2;; esac
+
+# --- shared canonicalization (identical in engine/vdlu-verify) -------------------
+# Canonical form = the manifest text with the "sig" field removed. The manifest is
+# stored compact + sorted-keys (vdlu-pack), so "sig" is always ,"sig":"...", bracketed
+# by "schema" (before) and "version" (after). We hash the sha256 hex of that form.
+vdlu_canon_sha256() {
+	_c=$1
+	case "$_c" in *'"sig":"'*) : ;; *) echo "vdlu: manifest has no sig field" >&2; return 1;; esac
+	_pre=${_c%%\"sig\":\"*}
+	_rest=${_c#*\"sig\":\"}
+	_tail=${_rest#*\",}
+	printf '%s%s' "$_pre" "$_tail" | sha256sum | cut -d' ' -f1
+}
+# --------------------------------------------------------------------------------
+
+set_key_id() {
+	_c=$1; _v=$2
+	_pre=${_c%%\"key_id\":\"*}
+	_rest=${_c#*\"key_id\":\"}
+	_tail=${_rest#*\"}
+	printf '%s"key_id":"%s"%s' "$_pre" "$_v" "$_tail"
+}
+
+set_sig() {
+	_c=$1; _v=$2
+	_pre=${_c%%\"sig\":\"*}
+	_rest=${_c#*\"sig\":\"}
+	_tail=${_rest#*\",}
+	printf '%s"sig":"%s",%s' "$_pre" "$_v" "$_tail"
+}
+
+c=$(cat "$manifest")
+case "$c" in *'"key_id":"'*) : ;; *) echo "vdlu-sign: manifest missing key_id field (regenerate with vdlu-pack)" >&2; exit 1;; esac
+case "$c" in *'"sig":"'*) : ;; *) echo "vdlu-sign: manifest missing sig field (regenerate with vdlu-pack)" >&2; exit 1;; esac
+
+c=$(set_key_id "$c" "$key_id")
+hex=$(vdlu_canon_sha256 "$c")
+
+tmpd=$(mktemp -d "${TMPDIR:-/tmp}/vdlu-sign.XXXXXX")
+trap 'rm -rf "$tmpd"' EXIT INT TERM
+printf '%s' "$hex" > "$tmpd/msg"
+openssl pkeyutl -sign -inkey "$priv" -rawin -in "$tmpd/msg" -out "$tmpd/sig.bin"
+sig=$(openssl base64 -A -in "$tmpd/sig.bin")
+
+c=$(set_sig "$c" "$sig")
+printf '%s\n' "$c" > "$tmpd/manifest.new"
+cp "$tmpd/manifest.new" "$manifest"
+
+echo "vdlu-sign: signed $manifest" >&2
+echo "  key_id=$key_id  canon_sha256=$hex" >&2
