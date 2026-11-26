@@ -673,8 +673,12 @@ do_fetch() {
 	# net_policy gate: the blob download (the real data cost) only runs on an ALLOWED network. The manifest
 	# check (do_diff) stays ungated, so the UI still reports updates on any network; only the download waits.
 	# Resumable: the plan/target persist, so the next trigger on an allowed network finishes it.
-	case "$SOURCE" in http://*|https://*)   # only a network source is gated; file:// (local staging) never is
-		net_allowed || { write_journal fetch DEFERRED "waiting for $(cfg net_policy any) network" ""; echo "VDLU: download deferred - net_policy=$(cfg net_policy any), egress=$(net_type)" >&2; return 1; } ;;
+	# Only a network source with something left to download is gated (file:// local staging never is): a
+	# plan whose blobs are all fetched (apply held, or reboot-class files staged) goes on offline.
+	case "$SOURCE" in http://*|https://*)
+		if awk -F'\t' '$2=="pending" {f=1} END {exit f ? 0 : 1}' "$PLAN" 2>/dev/null; then
+			net_allowed || { write_journal fetch DEFERRED "waiting for $(cfg net_policy any) network" ""; echo "VDLU: download deferred - net_policy=$(cfg net_policy any), egress=$(net_type)" >&2; return 1; }
+		fi ;;
 	esac
 	write_journal fetch FETCHING ""
 	local class st mode enc sha size path
