@@ -1211,6 +1211,74 @@ t_vdlu_engine_refuses_bad_feeds() {
     expect_has "$out" "downgrade blocked (1 < 2)" || return 1
     expect_eq "$(cat "$MD/a.txt")" "a 2"
 }
+# vdlu_js <out.js> <sed script>: functions of webroot/vdlu.js cut by sed (2-space indented inside its
+# IIFE) after a preamble of stand-ins: C, cfgCache, i18n tables, ex() logging each command to CMDS and
+# answering `cat` of the config with CAT (a string, or null = the read fails), toastMsg()
+vdlu_js() {
+    cat > "$1" <<'JS'
+var C = { vdluDir: '/vd', module: 'm' }, cfgCache = null, I = {}, DEFAULT_I18N = {}, CMDS = [], TOASTS = [], CAT = '';
+var cancelRequested = false, running = true, elToast = null, elBanner = null, panelEl = null;
+function ex(cmd) { CMDS.push(cmd); if (/^cat '/.test(cmd)) return CAT === null ? Promise.reject('rc=1') : Promise.resolve(CAT); return Promise.resolve(''); }
+function toastMsg(m) { TOASTS.push(m); }
+function stopPoll() {} function hideBanner() {} function hideToast() {} function startUpdate() {}
+JS
+    sed -n "$2" "$REPO/module/webroot/vdlu.js" >> "$1"
+}
+# V2: the WebUI's Updates panel never saves the profile the engine treats as unsigned-OK unless the user
+# picked it: with no profile= in the config the profile field shows hardened (the engine's default),
+# so "Save source" writes profile=hardened; and a save never rewrites the config from a read that
+# failed (it dropped every other key): it reads again, and writes nothing while that fails.
+# Page JS cut from vdlu.js with stand-in fields (selects show their first option until set). Needs node.
+t_vdlu_webui_config_safe() {
+    node -e "" >/dev/null 2>&1 || return 77
+    vdlu_js "$W/cfg.js" '/^  function T(k)/p; /^  function q(s)/p; /^  var CFG_DEFAULTS = /p; /^  function truthy(/p;
+        /^  function readConfig() {/,/^  }/p; /^  function writeConfig(patch) {/,/^  }/p; /^  function writeConfigFrom(/,/^  }/p;
+        /^  function fillPanelFromConfig(/,/^  }/p; /^  function doSaveSource() {/,/^  }/p'
+    cat >> "$W/cfg.js" <<'JS'
+var src = require('fs').readFileSync(process.argv[2], 'utf8'), fields, box;
+function mkpanel() {   // a fresh form as mountUpdatesPanel builds it
+  var re = /data-cfg="(\w+)"[^>]*>((?:<option value="[^"]*">[^<]*<\/option>)*)<\/select>|<input[^>]*data-cfg="(\w+)"/g, m;
+  fields = []; box = {};
+  while ((m = re.exec(src))) {
+    var opts = m[2] ? (m[2].match(/value="[^"]*"/g) || []).map(function (x) { return x.slice(7, -1); }) : null;
+    fields.push((function (k, opts) {
+      var v = opts ? opts[0] : '';
+      return { getAttribute: function () { return k; }, k: k,
+        get value() { return v; }, set value(x) { v = opts ? (opts.indexOf(x) >= 0 ? x : '') : x; } };
+    })(m[1] || m[3], opts));
+  }
+  cfgCache = null; CMDS = [];
+}
+panelEl = {
+  querySelectorAll: function (s) { return s === '.vdlu-fld [data-cfg]' ? fields : []; },
+  querySelector: function (s) { var k = /data-cfg=(\w+)\]/.exec(s); if (k) return fields.filter(function (f) { return f.k === k[1]; })[0];
+    return box[s] || (box[s] = {}); }
+};
+function written() { var w = CMDS.filter(function (c) { return /^cat > /.test(c); }); return w.length ? w[w.length - 1] : 'NONE'; }
+function settle() { return new Promise(function (r) { setTimeout(r, 20); }); }
+var GOOD = 'source=file:///f\nauto_on_reboot=1\n';
+(async function () {
+  var out = {};
+  mkpanel(); CAT = GOOD;                                     // a: no profile= line
+  fillPanelFromConfig(await readConfig()); doSaveSource(); await settle(); out.a = written();
+  mkpanel(); CAT = null;                                     // b: the read at mount failed, later works
+  fillPanelFromConfig(await readConfig()); CAT = GOOD;
+  doSaveSource(); await settle(); out.b1 = written();
+  doSaveSource(); await settle(); out.b2 = written();
+  mkpanel(); CAT = null;                                     // c: the config cannot be read at all
+  fillPanelFromConfig(await readConfig()); doSaveSource(); await settle(); out.c = written();
+  console.log(JSON.stringify(out));
+})();
+JS
+    r=$(node "$W/cfg.js" "$REPO/module/webroot/vdlu.js") || { fail "node: $r"; return 1; }
+    k() { printf '%s' "$r" | sed "s/.*\"$1\":\"//; s/\",\".*//; s/\"}\$//"; }
+    expect_has "$(k a)" 'profile=hardened' || return 1
+    expect_has "$(k a)" 'auto_on_reboot=1' || return 1
+    expect_eq "$(k b1)" NONE || { fail "saved a form filled from a failed read"; return 1; }
+    expect_has "$(k b2)" 'source=file:///f' || return 1
+    expect_has "$(k b2)" 'auto_on_reboot=1' || return 1
+    expect_eq "$(k c)" NONE
+}
 # F12: scripts/build-bundles.sh fetch() must not reuse a partial download as a cached tarball
 t_build_fetch_partial() {
     sed -n '/^fetch() {/,/^}/p' "$REPO/scripts/build-bundles.sh" > "$W/fetch.sh"
@@ -1787,7 +1855,7 @@ PY
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_add_key_commented t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_bfu_move_failure_reported t_bfu_rename_failure_reported t_bfu_move_odd_names t_bfu_switch_nothing_to_move t_bfu_stale_temp_ignored t_webui_status t_webui_verbs_exit_zero
 t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_freezer_escape t_freezer_escape_not_writable t_freezer_escape_uid_layout t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
-t_service_disabled t_customize t_uninstall t_sha256_gate t_gen_sha256_failure t_build_zip_sha256 t_build_zip_reproducible t_build_zip_vdlu_shipped t_customize_vdlu_migrates t_vdlu_engine_applies_feed t_vdlu_engine_signed_feed t_vdlu_sig_cut_injection t_vdlu_ca_bundle_replaced t_vdlu_lock_fresh_not_stolen t_vdlu_diff_failure_journal t_vdlu_pruned_target_recovers t_vdlu_fetched_target_applies_offline t_vdlu_stale_cancel_cleared t_vdlu_engine_refuses_bad_feeds t_build_fetch_partial t_build_fetch_pinned t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_release_version_code_above_published t_release_vdlu_key_required t_vdlu_release_feed_updates_device t_build_kills_build_user t_workflow_builds_dispatched_commit t_ci_validate_json t_ci_parity_failure t_preflight_docnav_count t_preflight_release_pat t_repack_baseline_modes t_version_bump_atomic t_gen_update_json_checks t_wiki_sync_paths"
+t_service_disabled t_customize t_uninstall t_sha256_gate t_gen_sha256_failure t_build_zip_sha256 t_build_zip_reproducible t_build_zip_vdlu_shipped t_customize_vdlu_migrates t_vdlu_engine_applies_feed t_vdlu_engine_signed_feed t_vdlu_sig_cut_injection t_vdlu_ca_bundle_replaced t_vdlu_lock_fresh_not_stolen t_vdlu_diff_failure_journal t_vdlu_pruned_target_recovers t_vdlu_fetched_target_applies_offline t_vdlu_stale_cancel_cleared t_vdlu_engine_refuses_bad_feeds t_vdlu_webui_config_safe t_build_fetch_partial t_build_fetch_pinned t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_release_version_code_above_published t_release_vdlu_key_required t_vdlu_release_feed_updates_device t_build_kills_build_user t_workflow_builds_dispatched_commit t_ci_validate_json t_ci_parity_failure t_preflight_docnav_count t_preflight_release_pat t_repack_baseline_modes t_version_bump_atomic t_gen_update_json_checks t_wiki_sync_paths"
 
 for c in $CASES; do run_case "$c"; done
 echo "summary: pass=$PASS fail=$FAIL skip=$SKIP${FAILED:+ failed:$FAILED}"

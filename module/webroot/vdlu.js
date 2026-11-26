@@ -149,10 +149,17 @@
       });
       cfgCache = { order: order, map: map };
       return cfgCache;
-    }, function () { cfgCache = { order: [], map: {} }; return cfgCache; });
+    }, function () { cfgCache = { order: [], map: {}, failed: true }; return cfgCache; });
   }
+  // writeConfig rewrites the whole file from the cache: a cache from a failed read would drop every
+  // key the patch does not name, so it reads again first and writes nothing while that fails
   function writeConfig(patch) {
-    var base = cfgCache || { order: [], map: {} };
+    return (cfgCache && !cfgCache.failed ? Promise.resolve(cfgCache) : readConfig()).then(function (base) {
+      if (base.failed) throw new Error(T('saveFail'));
+      return writeConfigFrom(base, patch);
+    });
+  }
+  function writeConfigFrom(base, patch) {
     var order = base.order.slice(), map = {};
     base.order.forEach(function (k) { map[k] = base.map[k]; });
     Object.keys(patch).forEach(function (k) {
@@ -502,7 +509,7 @@
       + '  <div class="vdlu-sec-ttl">' + esc(T('source')) + '</div>'
       + '  <label class="vdlu-fld"><span>source</span><input class="vdlu-inp" data-cfg="source" type="text" inputmode="url" spellcheck="false" placeholder="' + T('srcPlaceholder') + '"></label>'
       + '  <label class="vdlu-fld"><span>channel</span><select class="vdlu-sel" data-cfg="channel"><option value="stable">stable</option><option value="canary">canary</option></select></label>'
-      + '  <label class="vdlu-fld"><span>profile</span><select class="vdlu-sel" data-cfg="profile"><option value="trusted">trusted</option><option value="hardened">hardened</option></select></label>'
+      + '  <label class="vdlu-fld"><span>profile</span><select class="vdlu-sel" data-cfg="profile"><option value="hardened">hardened</option><option value="trusted">trusted</option></select></label>'
       + '  <label class="vdlu-fld"><span>' + esc(T('netPolicy')) + '</span><select class="vdlu-sel" data-cfg="net_policy"><option value="any">' + esc(T('netAny')) + '</option><option value="wifi">' + esc(T('netWifi')) + '</option><option value="mobile">' + esc(T('netMobile')) + '</option></select></label>'
       + '  <button class="vdlu-btn" type="button" data-a="save" hidden>' + esc(T('saveSource')) + '</button>'
       + '  <div class="vdlu-hint" data-a="saved" hidden>' + esc(T('savedDot')) + '</div>'
@@ -547,9 +554,11 @@
       sw.classList.toggle('on', on); sw.classList.toggle('off', !on);
     });
     [].forEach.call(panelEl.querySelectorAll('.vdlu-fld [data-cfg]'), function (f) {
-      var v = m[f.getAttribute('data-cfg')]; if (v != null) f.value = v;
+      var k = f.getAttribute('data-cfg'), v = m[k] != null ? m[k] : CFG_DEFAULTS[k]; if (v != null) f.value = v;
     });
   }
+  // the engine's value for a key the config lacks: a field showing anything else would be saved as it
+  var CFG_DEFAULTS = { profile: 'hardened', channel: 'stable', net_policy: 'any' };
   function truthy(v) { v = String(v == null ? '' : v).trim().toLowerCase(); return v === '1' || v === 'true' || v === 'on' || v === 'yes'; }
 
   function renderCheckResult(r, err) {
@@ -588,6 +597,12 @@
   }
 
   function doSaveSource() {
+    // a form filled from a failed read shows defaults, not the config: saving it would overwrite source
+    // and the rest, so show the config first and save nothing
+    if (!cfgCache || cfgCache.failed) {
+      readConfig().then(fillPanelFromConfig).then(function () { toastMsg(T('saveFail')); });
+      return;
+    }
     var p = {};
     ['source', 'channel', 'profile', 'net_policy'].forEach(function (k) {
       var f = panelEl.querySelector('.vdlu-fld [data-cfg=' + k + ']'); if (f) p[k] = f.value.trim();
