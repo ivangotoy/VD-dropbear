@@ -223,7 +223,7 @@
     bar.style.width = pct + '%';
     elToast.classList.toggle('ind', !!opts.indeterminate && total === 0);
 
-    elToast.classList.remove('ok', 'err', 'warn');
+    elToast.classList.remove('ok', 'err', 'warn', 'info');
     if (opts.kind) elToast.classList.add(opts.kind);
 
     var ln = tr('ln');

@@ -1279,6 +1279,28 @@ JS
     expect_has "$(k b2)" 'auto_on_reboot=1' || return 1
     expect_eq "$(k c)" NONE
 }
+# toast_js <out.js>: the toast functions of vdlu.js with a stand-in element for the toast
+toast_js() {
+    vdlu_js "$1" '/^  function T(k)/p; /^  function q(s)/p; /^  function esc(s)/p; /^  function phaseLabel(/p; /^  function stateLabel(/p;
+        /^  function fmtBytes(/,/^  }/p; /^  function tr(name)/p; /^  function showToast()/p; /^  function ensureToast() {/,/^  }/p;
+        /^  function renderToast(/,/^  }/p; /^  function endRun() {/,/^  }/p; /^  function finishDeferred(/,/^  }/p; /^  function finishDone(/,/^  }/p'
+    cat >> "$1" <<'JS'
+function el() { return { style: {}, classList: { s: new Set(), add: function () { for (var a of arguments) this.s.add(a); },
+  remove: function () { for (var a of arguments) this.s.delete(a); }, toggle: function (c, on) { on ? this.s.add(c) : this.s.delete(c); } },
+  parts: {}, querySelector: function (q) { return this.parts[q] || (this.parts[q] = el()); }, appendChild: function () {}, addEventListener: function () {} }; }
+var document = { createElement: el };
+elToast = el();
+function classes() { return Array.from(elToast.classList.s).join(' '); }
+JS
+}
+# V10: the toast's blue "info" style (a deferred download) does not stick to later toasts. Needs node.
+t_vdlu_webui_toast_info_cleared() {
+    node -e "" >/dev/null 2>&1 || return 77
+    toast_js "$W/t.js"
+    printf '%s\n' "finishDeferred({ state: 'DEFERRED' }); var d = classes();" \
+        "renderToast({ state: 'FETCHING', total: 2, done: 1 }, {}); console.log(d + '|' + classes());" >> "$W/t.js"
+    expect_eq "$(node "$W/t.js")" "info|"
+}
 # F12: scripts/build-bundles.sh fetch() must not reuse a partial download as a cached tarball
 t_build_fetch_partial() {
     sed -n '/^fetch() {/,/^}/p' "$REPO/scripts/build-bundles.sh" > "$W/fetch.sh"
@@ -1855,7 +1877,7 @@ PY
 CASES="t_args_default t_args_binds t_config_normalise t_config_bfu_store
 t_webui_config_roundtrip t_webui_config_rejects_empty t_webui_port_range t_webui_keys t_webui_add_key_commented t_webui_passwords t_webui_unterminated_last_line t_webui_args_quoted t_webui_write_failure t_bfu_toggle_moves_secrets t_bfu_move_failure_reported t_bfu_rename_failure_reported t_bfu_move_odd_names t_bfu_switch_nothing_to_move t_bfu_stale_temp_ignored t_webui_status t_webui_verbs_exit_zero
 t_action_start t_empty_hostkey_regenerated t_log_rotated t_start_without_log_quiet t_extra_env_no_glob t_ident_not_inherited t_action_restart_single_instance t_webui_lifecycle_verbs t_restart_keeps_sessions t_orphaned_session_not_listener t_overlapping_starts t_stale_pidfile t_slow_start_reported t_freezer_escape t_freezer_escape_not_writable t_freezer_escape_uid_layout t_disabled_not_started t_disable_stops_running t_log_without_state_dir t_service_afu_bfu
-t_service_disabled t_customize t_uninstall t_sha256_gate t_gen_sha256_failure t_build_zip_sha256 t_build_zip_reproducible t_build_zip_vdlu_shipped t_customize_vdlu_migrates t_vdlu_engine_applies_feed t_vdlu_engine_signed_feed t_vdlu_sig_cut_injection t_vdlu_ca_bundle_replaced t_vdlu_lock_fresh_not_stolen t_vdlu_diff_failure_journal t_vdlu_pruned_target_recovers t_vdlu_fetched_target_applies_offline t_vdlu_stale_cancel_cleared t_vdlu_engine_refuses_bad_feeds t_vdlu_webui_config_safe t_build_fetch_partial t_build_fetch_pinned t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_release_version_code_above_published t_release_vdlu_key_required t_vdlu_release_feed_updates_device t_build_kills_build_user t_workflow_builds_dispatched_commit t_ci_validate_json t_ci_parity_failure t_preflight_docnav_count t_preflight_release_pat t_repack_baseline_modes t_version_bump_atomic t_gen_update_json_checks t_wiki_sync_paths"
+t_service_disabled t_customize t_uninstall t_sha256_gate t_gen_sha256_failure t_build_zip_sha256 t_build_zip_reproducible t_build_zip_vdlu_shipped t_customize_vdlu_migrates t_vdlu_engine_applies_feed t_vdlu_engine_signed_feed t_vdlu_sig_cut_injection t_vdlu_ca_bundle_replaced t_vdlu_lock_fresh_not_stolen t_vdlu_diff_failure_journal t_vdlu_pruned_target_recovers t_vdlu_fetched_target_applies_offline t_vdlu_stale_cancel_cleared t_vdlu_engine_refuses_bad_feeds t_vdlu_webui_config_safe t_vdlu_webui_toast_info_cleared t_build_fetch_partial t_build_fetch_pinned t_release_cleanup_keeps_published t_release_end_to_end t_release_publish_reply_lost t_release_failure_after_publish t_release_version_code_above_published t_release_vdlu_key_required t_vdlu_release_feed_updates_device t_build_kills_build_user t_workflow_builds_dispatched_commit t_ci_validate_json t_ci_parity_failure t_preflight_docnav_count t_preflight_release_pat t_repack_baseline_modes t_version_bump_atomic t_gen_update_json_checks t_wiki_sync_paths"
 
 for c in $CASES; do run_case "$c"; done
 echo "summary: pass=$PASS fail=$FAIL skip=$SKIP${FAILED:+ failed:$FAILED}"
