@@ -683,7 +683,15 @@ do_fetch() {
 		case "$st" in skipped|fetched|applied|staged) continue ;; esac
 		write_journal fetch FETCHING "$path"
 		if dl_blob "$sha" "$enc" "$size"; then set_st "$path" fetched
-		else write_journal fetch ERROR "$path" "fetch failed: $path"; return 1; fi
+		else
+			write_journal fetch ERROR "$path" "fetch failed: $path"
+			# run/boot/resume resume a saved target without asking the feed again: once the feed moved
+			# on and pruned this target's blobs it failed forever. With nothing applied or staged yet,
+			# drop the target so the next run checks the feed again (fetched blobs stay cached).
+			awk -F'\t' '$2=="applied" || $2=="staged" {f=1} END {exit f ? 0 : 1}' "$PLAN" 2>/dev/null \
+				|| rm -f "$TARGET" "$PLAN" "$PLANDEL"
+			return 1
+		fi
 	done <"$PLAN"
 	write_journal fetch FETCHED ""
 	return 0
