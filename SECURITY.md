@@ -49,7 +49,8 @@ configuration and credentials. Please:
 - A neutral, uninformative version banner so network scanners cannot fingerprint the exact server and
   version.
 - Credentials on credential-encrypted storage by default (decrypted only after you unlock).
-- No telemetry, no network calls of its own, no analytics. It runs entirely on your device.
+- No telemetry, no analytics. Its only network traffic is the VDLU updater fetching its signed update
+  feed (in the Forgejo fork's builds: only from the fork's repository); everything else runs on your device.
 
 ## Supported versions
 

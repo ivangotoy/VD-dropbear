@@ -52,8 +52,28 @@ module (`module.prop`) and on GitHub Releases.
   before, only `/sys/fs/cgroup/apps/...` was left and the daemon could still be frozen with the manager.
 - Adding a key in the WebUI that is in `authorized_keys` only as a commented-out line adds it, instead of
   answering `ok` and leaving the key unusable.
-- The WebUI no longer shows an Updates tab: it only hosted the VDLU updater panel, which this build leaves out,
-  so the tab was empty.
+
+### Fork build (Forgejo)
+- **Flashless updates (VDLU) from this repository.** The zip ships the VDLU updater and the WebUI's Updates tab
+  again. Its feed is this repository's `.forgejo/vdlu-feed`, its keyring holds only the fork's key
+  `ivangotoy-2026`, and it carries a static curl (`bin/<abi>/curl`), so neither the engine nor the WebUI
+  downloads one. Each release's feed is signed by the release CI, and its manifest ships as
+  `vdlu/baseline.json`: a device flashed with one release updates to the next without a reflash.
+- Flashing this build over an install that followed another feed (upstream's included) switches it to this
+  feed and key and to the hardened profile, keeps its other settings, and drops a pending flashless update
+  from the old feed.
+- A release's versionCode is always above the last published one (a rerun on the same upstream version no
+  longer reuses it).
+- The updater refuses a manifest with unsigned text next to its signature (it could add files to a validly
+  signed update) or with NUL bytes, and holds a feed to the installed versionCode when `current.json` is
+  missing.
+- The WebUI's Updates panel no longer saves `profile=trusted` (signature not required) when the config has no
+  profile, and no longer overwrites the config after a failed read; the blue style of a deferred-download
+  toast no longer sticks.
+- The updater recovers by itself where it used to need a hand-removed file: a lock left by an earlier boot or
+  just being taken, a pending update whose blobs the feed has pruned, and a cancel pressed after a run ended;
+  a failed update check ends in an error instead of a stuck "resumable" update, an already downloaded update
+  applies without an allowed network, and the CA bundle is no longer emptied under a running download.
 
 ## [v1.12] (2026-11-24)
 

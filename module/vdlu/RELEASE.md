@@ -4,6 +4,25 @@ Copyright (C) 2026  VD171
 -->
 # VDLU release step (VD Dropbear)
 
+## This fork's build (Forgejo)
+
+The Forgejo fork's releases (`.forgejo/module-ci.sh`) ship this updater fed only from the fork's repository;
+the upstream steps below do not apply to them:
+
+- **Feed:** `https://git.digtvbg.com/ivangotoy/VD-dropbear/raw/branch/main/.forgejo/vdlu-feed`
+  (`manifest.json` + `blobs/`), written to `main` by the release CI in the same commit as `.forgejo/update.json`.
+- **Key:** `ivangotoy-2026` is the only key in the shipped `keyring/` and is pinned by `key_id=` in
+  `config.default`. The release CI signs the manifest with it (repository secret `VDLU_SIGN_KEY`, used only
+  by the release step), checks the signature with `vdlu-verify` and the shipped key, and ships the signed
+  manifest as `vdlu/baseline.json`.
+- **Never upstream's feed:** the build points `config.default` at the fork's feed, and every flash of a fork
+  zip sets `source=`/`key_id=` of an existing install to those values (`profile=hardened`), so an install
+  that followed upstream's feed follows the fork's afterwards. The engine never takes `vdlu/` from a feed, so
+  engine, verifier and key changes reach a device only by flashing a zip.
+- **curl:** the zip ships the static curl in `bin/<abi>/curl`; neither the engine nor the WebUI downloads one.
+
+## Upstream release step
+
 VD Dropbear ships the **[VDLiveUpdate](https://github.com/VD171/VDLiveUpdate) (VDLU)** flashless updater in `module/vdlu/` (engine `update.sh` + `vdlu-verify` +
 `keyring/`) with the **hardened** profile: a signed manifest is mandatory, and an unsigned, tampered or
 downgraded manifest is refused. Producing a release means packing the assembled module tree into a
@@ -94,10 +113,15 @@ resetting the feed branch loses nothing.
 
 ## Key rotation
 
-The keyring is a directory of `<key_id>.pub` PEM files. To rotate, generate a new key
-(`vdlu-keygen vd-2027 keys`), add `vd-2027.pub` next to `vd-2026.pub` in `module/vdlu/keyring/` (keep the
-old one so installs that predate the rotation still verify), and sign new manifests with the new
-`key_id`. No engine change.
+The keyring is a directory of `<key_id>.pub` files, each the RAW 32-byte ed25519 public key (what
+`vdlu-keygen` writes as `<id>.pub.raw`; `vdlu-verify` refuses a PEM file). To rotate, generate a new key
+(`vdlu-keygen vd-2027 keys`), add its raw key as `vd-2027.pub` next to `vd-2026.pub` in
+`module/vdlu/keyring/` (keep the old one so installs that predate the rotation still verify), and sign new
+manifests with the new `key_id`. With more than one key in the keyring, the config must name the accepted
+ids (`key_id=vd-2026,vd-2027`): without it the engine and `vdlu-verify` refuse every manifest. The
+persistent config (`/data/adb/<module>/vdlu/config`) is seeded from `config.default` only on the first
+install, so a new `key_id` there reaches existing installs only if the install step rewrites it (the fork's
+build does this on every flash).
 
 ## Device runtime tools (hardened)
 
@@ -109,13 +133,16 @@ leans on one tiny vendored verifier, the system toybox, and a static `curl` fetc
 | `ed25519-mini` | ed25519 signature verify (mandatory under hardened) | **vendored**: `module/vdlu/verify/<abi>/ed25519-mini` (committed, TweetNaCl, provenance in `module/vdlu/verify/PROVENANCE.json`) |
 | `gzip` | decompress a blob when `enc=gz` | system `toybox gzip` |
 | `sha256sum` / `toybox` | per blob hash (always) | system toybox |
-| `curl` | fetch over the `https://` source | fetched once from the signed tools-feed (fetch-bootstrap), cached in `vdlu-tools/<abi>/` |
+| `curl` | fetch over the `https://` source | downloaded once by the WebUI from the signed tools-feed and adopted by `update.sh install-tool`, kept in `$VDLU_DIR/tools/<abi>/` (fork build: shipped in `bin/<abi>/curl`) |
 
 The verifier is vendored, so hardened verify always runs on device with no build-time toolchain. If it is
 ever missing, hardened verify is unavailable and the update aborts cleanly (it never applies anything
-unverified), so the failure mode is a no op, never a corrupted module. The static `curl` is not in the
-`.zip`: the engine fetches it once from the signed, content-addressed tools-feed (same ed25519 trust root)
-and caches it under `vdlu-tools/<abi>/`. Covers `arm64-v8a`, `armeabi-v7a`, `x86_64` and `x86`.
+unverified), so the failure mode is a no op, never a corrupted module. Upstream's `.zip` has no static
+`curl`: the WebUI (not the engine) downloads it once from the signed, content-addressed tools-feed (same
+ed25519 trust root), and `update.sh install-tool` keeps it under `$VDLU_DIR/tools/<abi>/` after checking
+the signature and its hash. A device without curl that never opened the WebUI cannot fetch an `https://`
+feed (boot runs fail with "no curl/wget"). The fork's zip ships the curl in `bin/<abi>/curl` instead.
+Covers `arm64-v8a`, `armeabi-v7a`, `x86_64` and `x86`.
 
 > The slim release also seeds `module/vdlu/baseline.json` (a copy of the signed manifest, so a fresh
 > install is born "current" and never phantom-regresses to a full download); the packer excludes

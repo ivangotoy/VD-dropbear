@@ -233,7 +233,10 @@ root manager's update check reads this repository's `.forgejo/update.json` (`upd
 described above ships too, fed only from this repository: its keyring holds only this fork's key
 (`ivangotoy-2026`, `.forgejo/vdlu/`), its `source` is
 `https://git.digtvbg.com/ivangotoy/VD-dropbear/raw/branch/main/.forgejo/vdlu-feed`, and the zip carries the
-static `curl` it fetches with (`bin/<abi>/curl`, from VDLiveUpdate); it never fetches upstream's feed.
+static `curl` it fetches with (`bin/<abi>/curl`, from VDLiveUpdate); it never fetches upstream's feed. The
+release CI signs each release's feed with that key (a repository secret, never in the repository), ships the
+signed manifest as `vdlu/baseline.json` and commits the feed with `.forgejo/update.json`. Flashing a release
+over an install that followed another feed (upstream's included) moves it to this feed and key.
 
 ## More KernelSU modules
 
