@@ -893,8 +893,8 @@ t_build_zip_reproducible() {
 # The fork zip ships the VDLU updater fed only from this forge: engine, verifier binaries (as in
 # vdlu/verify/PROVENANCE.json), the WebUI panel and its Updates tab, customize.sh's VDLU lines; the
 # keyring holds only the owner's key, config.default points at this forge's feed with that key id
-# pinned, and every ABI gets the static curl the engine fetches with (no tools download).
-# Needs bash, python3, zip, unzip (else SKIP).
+# pinned, and every ABI gets the static curl the engine fetches with (no tools download), named
+# in that ABI's PROVENANCE.json. Needs bash, python3, zip, unzip (else SKIP).
 t_build_zip_vdlu_shipped() {
     for _t in bash python3 zip unzip; do command -v "$_t" >/dev/null 2>&1 || return 77; done
     build_zip "$W/out" || return 1
@@ -920,7 +920,11 @@ for abi in ("arm64-v8a", "armeabi-v7a", "x86", "x86_64"):
     p = f"bin/{abi}/curl"
     assert hashlib.sha256(open(os.path.join(x, p), "rb").read()).hexdigest() == c[f"curl/{abi}/curl"]["sha256"], p
     assert (zi[p].external_attr >> 16) & 0o777 == 0o755, p + " mode"
+    e = [b for b in json.load(open(os.path.join(x, f"bin/{abi}/PROVENANCE.json")))["binaries"] if b["file"] == "curl"]
+    assert len(e) == 1 and e[0]["sha256"] == c[f"curl/{abi}/curl"]["sha256"], f"bin/{abi}/PROVENANCE.json does not name curl"
+    assert e[0]["bytes"] == os.path.getsize(os.path.join(x, p)), f"bin/{abi}/PROVENANCE.json curl size"
 PY
+    sh "$REPO/.github/scripts/provenance-check.sh" "$W/x" > "$W/prov" 2>&1 || { fail "$(grep FAIL "$W/prov" | tr '\n' ' ')"; return 1; }
     c=$(cat "$W/x/vdlu/config.default")
     expect_has "$c" "
 source=https://forge.invalid/example/VD-dropbear/raw/branch/main/.forgejo/vdlu-feed
