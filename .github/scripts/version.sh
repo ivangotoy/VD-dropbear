@@ -46,6 +46,8 @@ UJSON="$ROOT/module/update.json"
 REPO="VD171/$(basename "$ROOT")"
 SCHEME="${SCHEME:-fleet}"
 SUFFIX="${SUFFIX:-}"
+# SUFFIX lands in a sed replacement, a bash ${//} replacement and the update.json text unescaped
+case "$SUFFIX" in *[!A-Za-z0-9._-]*) echo "version.sh: SUFFIX may hold only letters, digits, '.', '_' and '-'" >&2; exit 2 ;; esac
 
 # Emit the CI step outputs the release workflow consumes via steps.version.outputs.* (version,
 # version_code, bumped, zip_name). echo-to-stdout alone leaves those outputs EMPTY -> a release CI
