@@ -133,6 +133,12 @@ patch_openssh() {
   # startup (getpwuid => pwcopy => xstrdup(NULL)); scp survives because its
   # -t/-f path never calls pwcopy. Guard pw_gecos the same way pw_passwd is.
   perl -0pi -e 's/copy->pw_gecos = xstrdup\(pw->pw_gecos\);/copy->pw_gecos = xstrdup(pw->pw_gecos == NULL ? "" : pw->pw_gecos);/' "$src/misc.c"
+  # perl -pi exits 0 when a pattern matches nothing (a reworded upstream line): stop instead of
+  # building an sftp-server without the fix
+  grep -q 'vddb_memzero' "$src/openbsd-compat/explicit_bzero.c" \
+    || { echo "patch_openssh: the explicit_bzero fix did not apply" >&2; return 1; }
+  grep -qF 'pw->pw_gecos == NULL ? "" : pw->pw_gecos' "$src/misc.c" \
+    || { echo "patch_openssh: the pw_gecos fix did not apply" >&2; return 1; }
 }
 
 for ABI in $ABIS; do
