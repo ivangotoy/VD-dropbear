@@ -84,7 +84,7 @@ globally-readable "I am being debugged" flag that anything on the device can rea
   - login shell, `HOME`, extra environment
   - idle timeout, keepalive, receive window
   - local / remote port forwarding and gateway ports (all **off** by default)
-  - host-key type (ed25519 / rsa / ecdsa)
+  - host-key type (ed25519 / ecdsa)
 - **Hidden version banner.** The SSH protocol requires *a* banner, so it cannot be removed, but VD
   Dropbear replaces it with an uninformative one so scanners cannot fingerprint the exact server or
   version and aim known-version attacks at it.
