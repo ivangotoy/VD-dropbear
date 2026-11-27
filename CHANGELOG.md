@@ -48,6 +48,13 @@ module (`module.prop`) and on GitHub Releases.
 - **Turning public-key login off now fully disables it.** It no longer falls back to Dropbear's built-in
   `~/.ssh/authorized_keys`, so off means off.
 
+### Fork build (Forgejo)
+- The flashless updater no longer depends on `find -mmin` to tell a lock just taken by another run from a
+  stale one, or to clear a takeover marker left by a killed run; with a `find` that lacks it (toybox before
+  Android 8) a fresh lock was taken over and a leftover marker kept every later takeover busy.
+- The flashless updater empties its blob cache once an update is done, instead of keeping the blobs of
+  every update on the device; an update waiting for a reboot keeps its blobs until the boot finishes it.
+
 ## [v1.14] (2026-11-26)
 
 ### Changed
