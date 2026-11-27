@@ -163,11 +163,18 @@ init_paths() {
 # mkdir-based lock (portable: toybox `flock` only takes the fd-form and its fd handling is
 # unreliable on Android, so flock is NOT used). mkdir is atomic; stale-lock recovery by PID.
 boot_id() { cat /proc/sys/kernel/random/boot_id 2>/dev/null; }
+# lock_age <dir>: seconds since <dir> was modified, nothing when either time cannot be read (stat -c %Y
+# and date +%s are in toybox from Android 7; its find has -mmin only from Android 8)
+lock_age() {
+	local m n
+	m=$(stat -c %Y "$1" 2>/dev/null); n=$(date +%s 2>/dev/null)
+	isnum "$m" && isnum "$n" && echo $((n - m))
+}
 # lock_stale <pid> <boot>: 0 when a lock.d holding them is stale. No pid yet in a lock made within the
 # last minute: its owner is between mkdir and writing the pid, not dead. A lock from an earlier boot (a
 # run killed by a power-off) is stale even if its pid now belongs to another process.
 lock_stale() {
-	[ -z "$1" ] && [ -n "$(find "$VDLU_DIR/lock.d" -maxdepth 0 -mmin -1 2>/dev/null)" ] && return 1
+	if [ -z "$1" ]; then _la=$(lock_age "$VDLU_DIR/lock.d"); [ -n "$_la" ] && [ "$_la" -lt 60 ] && return 1; fi
 	[ -z "$1" ] || ! kill -0 "$1" 2>/dev/null || { [ -n "$2" ] && [ "$2" != "$(boot_id)" ]; }
 }
 acquire_lock_try() {   # non-blocking: 0 = acquired, 1 = busy (NO exit). The patient boot retry backs off on 1.
@@ -177,7 +184,7 @@ acquire_lock_try() {   # non-blocking: 0 = acquired, 1 = busy (NO exit). The pat
 		# and the lock is judged again inside it, so a run that judged it before another run took it
 		# over stays out. A lock.take left by a killed run is removed after a minute.
 		if ! mkdir "$VDLU_DIR/lock.take" 2>/dev/null; then
-			[ -n "$(find "$VDLU_DIR/lock.take" -maxdepth 0 -mmin +1 2>/dev/null)" ] && rm -rf "$VDLU_DIR/lock.take" 2>/dev/null
+			_la=$(lock_age "$VDLU_DIR/lock.take"); [ -n "$_la" ] && [ "$_la" -gt 60 ] && rm -rf "$VDLU_DIR/lock.take" 2>/dev/null
 			return 1
 		fi
 		if [ -d "$VDLU_DIR/lock.d" ] && ! lock_stale "$(cat "$VDLU_DIR/lock.d/pid" 2>/dev/null)" "$(cat "$VDLU_DIR/lock.d/boot" 2>/dev/null)"; then
