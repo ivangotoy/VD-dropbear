@@ -50,7 +50,7 @@ ABIS="${ABIS:-arm64-v8a armeabi-v7a x86 x86_64}"
 ZLIB_VERSION="${ZLIB_VERSION:-1.3.1}"
 RSYNC_VERSION="${RSYNC_VERSION:-3.4.1}"
 OPENSSH_VERSION="${OPENSSH_VERSION:-9.9p2}"
-OPENSSH_TAG="V_$(echo "$OPENSSH_VERSION" | tr 'p.' 'P_' | tr '[:lower:]' '[:upper:]')"  # 9.9p2 -> V_9_9_P2
+OPENSSH_TAG="V_$(echo "$OPENSSH_VERSION" | sed 's/\./_/g; s/p/_P/')"  # 9.9p2 -> V_9_9_P2
 # sha256 of each source tarball for the versions above; fetch() refuses any other bytes before they
 # are extracted (a changed version needs its own pin). The release tarballs carry upstream's detached
 # signatures (zlib: Mark Adler, rsync: Andrew Tridgell, OpenSSH: Damien Miller) and were checked against
