@@ -94,7 +94,7 @@ else
   counter="$((10#${tail%%.*}))"
   case "$tail" in *.*) patch="$((10#${tail#*.}))" ;; *) patch=0 ;; esac
   fmt() {  # fmt <major> <counter> <patch>
-    if [ "$2" -eq 0 ]; then set -- "$1" "0.0" "$3"; _base="v$1.0"; else _base="$(printf 'v%s.%02d' "$1" "$2")"; fi
+    if [ "$2" -eq 0 ]; then _base="v$1.0"; else _base="$(printf 'v%s.%02d' "$1" "$2")"; fi
     if [ "$3" -gt 0 ]; then printf '%s.%d' "$_base" "$3"; else printf '%s' "$_base"; fi
   }
   code() { printf '%d' "$(( $1*10000 + $2*100 + $3 ))"; }
