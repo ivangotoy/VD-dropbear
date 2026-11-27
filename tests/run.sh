@@ -894,7 +894,8 @@ t_build_zip_reproducible() {
 # vdlu/verify/PROVENANCE.json), the WebUI panel and its Updates tab, customize.sh's VDLU lines; the
 # keyring holds only the owner's key, config.default points at this forge's feed with that key id
 # pinned, and every ABI gets the static curl the engine fetches with (no tools download), named
-# in that ABI's PROVENANCE.json. Needs bash, python3, zip, unzip (else SKIP).
+# in that ABI's PROVENANCE.json; the maintainer's vdlu/RELEASE.md (upstream's feed URL) stays out, as in
+# upstream's zip. Needs bash, python3, zip, unzip (else SKIP).
 t_build_zip_vdlu_shipped() {
     for _t in bash python3 zip unzip; do command -v "$_t" >/dev/null 2>&1 || return 77; done
     build_zip "$W/out" || return 1
@@ -905,6 +906,7 @@ t_build_zip_vdlu_shipped() {
     done
     expect_eq "$(grep '^vdlu/keyring/.*\.pub$' "$W/list")" vdlu/keyring/ivangotoy-2026.pub || return 1
     grep -q 'baseline\.json' "$W/list" && { fail "build() zip holds upstream's baseline.json"; return 1; }
+    grep -q '^vdlu/RELEASE\.md' "$W/list" && { fail "build() zip holds the maintainer's vdlu/RELEASE.md"; return 1; }
     mkdir -p "$W/x"; (cd "$W/x" && unzip -q "$z") || { fail "unzip"; return 1; }
     cmp -s "$W/x/vdlu/keyring/ivangotoy-2026.pub" "$REPO/.forgejo/vdlu/ivangotoy-2026.pub" || { fail "keyring key differs"; return 1; }
     python3 -I - "$W/x" "$z" "$REPO" > "$W/py" 2>&1 <<'PY' || { fail "$(tr '\n' ' ' < "$W/py")"; return 1; }
