@@ -849,12 +849,18 @@ prune_rollback() {
 
 write_current() { cp -f "$1" "$CURRENT.tmp" 2>/dev/null && mv -f "$CURRENT.tmp" "$CURRENT" 2>/dev/null; }
 
+# blobs/ holds a transaction's blobs until it is DONE (resume, apply offline, re-stage a failed swap);
+# nothing reads it after that (a later plan fetches, or seeds from the live file, what it needs), so a
+# DONE transaction empties it instead of keeping every release's blobs on the device
+clear_blobs() { rm -rf "$BLOBS" 2>/dev/null; mkdir -p "$BLOBS" 2>/dev/null; }
+
 finalize_done() {
 	do_delete
 	write_current "$TARGET"
 	write_journal commit DONE ""
 	rm -f "$PLAN" "$PLANDEL" "$TARGET"
 	prune_rollback
+	clear_blobs
 }
 
 do_commit() { # allow_swap
