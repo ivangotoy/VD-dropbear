@@ -129,9 +129,8 @@ fi
 old_zip="$(sed -n 's/.*"zipUrl"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$UJSON" | head -n1)"
 old_cl="$(sed -n 's/.*"changelog"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$UJSON" | head -n1)"
 [ -n "$old_zip" ] || { echo "version.sh: $UJSON has no zipUrl to derive the new one from" >&2; exit 1; }
-# module.prop only after the update.json checks: a failed bump leaves both files as they were
-sed -i "s/^version=.*/version=${NAME}/"       "$PROP"
-sed -i "s/^versionCode=.*/versionCode=${CODE}/" "$PROP"
+# both files are written to temp files after the update.json checks and renamed last: a failed bump
+# leaves both as they were
 new_zip="${old_zip//"$cur_name"/$NAME}"
 # A SUFFIX module whose release zip carries the BARE version (no suffix) will not match cur_name,
 # so this substitution is a no-op and the zipUrl stays stale. Warn loud (non-fatal: don't break releases).
@@ -141,7 +140,8 @@ fi
 [ -n "$old_cl" ] || old_cl="https://raw.githubusercontent.com/${REPO}/main/CHANGELOG.md"
 ZIP="$(basename "$new_zip")"
 
-cat > "$UJSON" <<EOF
+trap 'rm -f "$UJSON.tmp.$$" "$PROP.tmp.$$"' EXIT
+cat > "$UJSON.tmp.$$" <<EOF
 {
   "version": "${NAME}",
   "versionCode": ${CODE},
@@ -152,6 +152,9 @@ cat > "$UJSON" <<EOF
   "sha256": ""
 }
 EOF
+sed -e "s/^version=.*/version=${NAME}/" -e "s/^versionCode=.*/versionCode=${CODE}/" "$PROP" > "$PROP.tmp.$$"
+mv -f "$UJSON.tmp.$$" "$UJSON"
+mv -f "$PROP.tmp.$$" "$PROP"
 
 emit_outputs "$NAME" "$CODE" true "$ZIP"
 echo "version=${NAME} versionCode=${CODE} zip=${ZIP}"

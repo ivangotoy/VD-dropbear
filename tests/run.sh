@@ -2108,6 +2108,7 @@ t_repack_baseline_modes() {
 }
 # T1: version.sh bump checks module/update.json before it writes anything: a missing update.json
 # fails the bump with module.prop untouched (a rerun used to bump twice); a good one bumps both.
+# B6: the two files change together or not at all.
 t_version_bump_atomic() {
     command -v bash >/dev/null 2>&1 || return 77
     _v=$W/vs; mkdir -p "$_v/.github/scripts" "$_v/module"
@@ -2118,7 +2119,14 @@ t_version_bump_atomic() {
     printf '{\n  "zipUrl": "https://example.invalid/v1.13/x-v1.13.zip"\n}\n' > "$_v/module/update.json"
     (cd "$_v" && SCHEME=minor bash .github/scripts/version.sh bump) > "$W/out" 2>&1 || { fail "bump failed: $(tr '\n' ' ' < "$W/out")"; return 1; }
     expect_has "$(cat "$_v/module/module.prop")" "versionCode=10014" || return 1
-    expect_has "$(cat "$_v/module/update.json")" "x-v1.14.zip"
+    expect_has "$(cat "$_v/module/update.json")" "x-v1.14.zip" || return 1
+    # B6: an update.json the bump cannot write in place (here read-only) does not leave module.prop
+    # bumped next to the old update.json: both are renamed into place, or neither changes
+    chmod 444 "$_v/module/update.json"
+    (cd "$_v" && SCHEME=minor bash .github/scripts/version.sh bump) > "$W/out" 2>&1
+    _p=$(sed -n 's/^versionCode=//p' "$_v/module/module.prop"); _u=$(cat "$_v/module/update.json")
+    case "$_p:$_u" in 10014:*x-v1.14.zip*|10015:*x-v1.15.zip*) : ;; *) fail "module.prop $_p next to update.json: $_u"; return 1 ;; esac
+    expect_eq "$(ls "$_v/module" | grep -c '\.tmp\.')" 0
 }
 # T2: tools/gen-update-json.sh refuses a module.prop without a numeric versionCode instead of
 # writing an update.json that is not JSON and exiting 0; a good module.prop gives valid JSON.
