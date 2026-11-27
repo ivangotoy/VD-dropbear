@@ -1283,7 +1283,7 @@ JS
 toast_js() {
     vdlu_js "$1" '/^  function T(k)/p; /^  function q(s)/p; /^  function esc(s)/p; /^  function phaseLabel(/p; /^  function stateLabel(/p;
         /^  function fmtBytes(/,/^  }/p; /^  function tr(name)/p; /^  function showToast()/p; /^  function ensureToast() {/,/^  }/p;
-        /^  function renderToast(/,/^  }/p; /^  function endRun() {/,/^  }/p; /^  function finishDeferred(/,/^  }/p; /^  function finishDone(/,/^  }/p'
+        /^  function staleTarget(/p; /^  function renderToast(/,/^  }/p; /^  function endRun() {/,/^  }/p; /^  function finishDeferred(/,/^  }/p; /^  function finishDone(/,/^  }/p'
     cat >> "$1" <<'JS'
 function el() { return { style: {}, classList: { s: new Set(), add: function () { for (var a of arguments) this.s.add(a); },
   remove: function () { for (var a of arguments) this.s.delete(a); }, toggle: function (c, on) { on ? this.s.add(c) : this.s.delete(c); } },

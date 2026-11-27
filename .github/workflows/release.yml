@@ -63,6 +63,10 @@ jobs:
             python3 -c "import json,hashlib,sys; d=json.load(open('module/bin/PROVENANCE.json')); bad=[f'module/bin/{a}/{b}' for b,m in d['binaries'].items() for a,i in m['abi'].items() if hashlib.sha256(open(f'module/bin/{a}/{b}','rb').read()).hexdigest()!=i['sha256']]; sys.exit('provenance MISMATCH: '+', '.join(bad)) if bad else print('provenance OK')"
           fi
 
+      - name: Provenance beside every bundled binary (kit guard, STANDARDS 8)
+        # Each bin/<abi> and vdlu/verify/<abi> dir must ship a PROVENANCE.json that names its binaries.
+        run: sh .github/scripts/provenance-check.sh module
+
       - name: Assemble module zip
         id: pack
         run: |
@@ -84,18 +88,23 @@ jobs:
           sha256sum VD-dropbear-*.zip
           echo "ver=${ver}" >> "$GITHUB_OUTPUT"
 
+      - name: Reject orphan .sha256 companions in the zip (kit guard, STANDARDS 8)
+        # An orphan <file>.sha256 (target pruned by -x) would abort the on-device flash gate.
+        run: sh .github/scripts/zip-orphan-check.sh "VD-dropbear-${{ steps.pack.outputs.ver }}.zip"
+
       - name: Write release notes
         # House rules (do NOT change without the owner): the body ends with the canonical
-        # @Priv8_VD banner VERBATIM, carries a per-file sha256 block, and NEVER includes a
-        # "Generated with Claude" footer (that is for docs/wiki only).
+        # @Priv8_VD banner VERBATIM, carries a sha256 block for the zip and the binaries, and
+        # NEVER includes a "Generated with Claude" footer (that is for docs/wiki only).
         env:
           EXTRA_NOTES: ${{ github.event.inputs.notes }}
         run: |
           ver="${{ steps.pack.outputs.ver }}"
           zip="VD-dropbear-${ver}.zip"
           tmp="$(mktemp -d)"; unzip -q "$zip" -d "$tmp"
-          # sha256 of the zip, then of every file inside it
-          sums="$( sha256sum "$zip"; ( cd "$tmp" && find . -type f | sed 's#^\./##' | LC_ALL=C sort | while IFS= read -r f; do sha256sum "$f"; done ) )"
+          # sha256 of the zip, then of each shipped SSH binary (bin/<abi>/*). The full per-file
+          # set is noise here; it lives in bin/PROVENANCE.json. Owner: the zip + binaries is enough.
+          sums="$( sha256sum "$zip"; ( cd "$tmp" && find bin -type f ! -name '*.json' ! -name '*.sha256' | LC_ALL=C sort | while IFS= read -r f; do sha256sum "$f"; done ) )"
           rm -rf "$tmp"
           {
             echo "Standalone, fully configurable rooted SSH server for KernelSU, APatch and Magisk, with a WebUI."
@@ -110,6 +119,7 @@ jobs:
             echo "Full guide and reference: https://github.com/VD171/VD-dropbear/wiki"
             echo
             echo "### Checksums (sha256)"
+            echo "The module zip and the shipped per-ABI SSH binaries."
             echo
             echo '```'
             echo "$sums"

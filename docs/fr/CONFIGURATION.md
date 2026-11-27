@@ -30,9 +30,9 @@
 # Configuration
 
 Les réglages résident dans `/data/adb/vddropbear/config` (initialisés depuis
-`module/common/config.default` au premier démarrage). La **WebUI** édite ce fichier pour vous ; vous
+`module/common/config.default` au premier démarrage). La **WebUI** édite ce fichier pour vous, vous
 pouvez aussi l'éditer à la main. Il est sourcé comme du shell, alors utilisez `KEY=value` sans espaces
-autour du `=`. Les réglages ne sont pas secrets et résident dans un stockage chiffré par appareil ; les
+autour du `=`. Les réglages ne sont pas secrets et résident dans un stockage chiffré par appareil, les
 secrets (host keys, clés autorisées, hachages de mots de passe) résident dans le magasin de secrets,
 jamais ici.
 
@@ -43,18 +43,18 @@ Appliquez les changements en redémarrant le démon (le **Save & restart** de la
 | Key | Default | Signification |
 |-----|---------|---------|
 | `ENABLED` | `1` | Démarre le démon au boot. `0` le désactive entièrement. |
-| `START_IN_BFU` | `0` | `0` : démarre uniquement après le premier déverrouillage (AFU) ; les secrets restent sur le stockage chiffré par identifiants (CE). `1` : démarre aussi avant le premier déverrouillage (BFU) ; les secrets passent au stockage chiffré par appareil (DE), lisible avant le déverrouillage. |
+| `START_IN_BFU` | `0` | `0` : démarre uniquement après le premier déverrouillage (AFU), les secrets restent sur le stockage chiffré par identifiants (CE). `1` : démarre aussi avant le premier déverrouillage (BFU), les secrets passent au stockage chiffré par appareil (DE), lisible avant le déverrouillage. |
 | `PORT` | `2222` | Port d'écoute par défaut (les ports par bind peuvent le remplacer dans `LISTEN_ADDRESSES`). |
 
 ## Écoute / binds (composables)
 
-Toute combinaison est permise ; les binds sélectionnés sont fusionnés. Si vous videz tout, VD Dropbear
+Toute combinaison est permise, les binds sélectionnés sont fusionnés. Si vous videz tout, VD Dropbear
 fait le bind sur loopback plutôt que sur chaque interface.
 
 | Key | Default | Signification |
 |-----|---------|---------|
 | `LISTEN_LOOPBACK` | `1` | Écoute uniquement sur `127.0.0.1` / `::1`. |
-| `LISTEN_ALL` | `0` | Écoute sur chaque interface (`0.0.0.0` / `::`); expose l'appareil. |
+| `LISTEN_ALL` | `0` | Écoute sur chaque interface (`0.0.0.0` / `::`), expose l'appareil. |
 | `LISTEN_IPV4` | `1` | Inclut les binds IPv4. |
 | `LISTEN_IPV6` | `1` | Inclut les binds IPv6. |
 | `LISTEN_ADDRESSES` | `""` | Binds spécifiques supplémentaires, séparés par des virgules : `addr` (utilise `PORT`) ou `addr:port`, IPv4 ou IPv6. |
@@ -70,7 +70,7 @@ fait le bind sur loopback plutôt que sur chaque interface.
 
 ## Authentification
 
-Une connexion s'exécute sous le compte avec lequel vous vous authentifiez : **root** par défaut, ou un compte à privilèges réduits (`shell`, `system`). Les clés sont la valeur par défaut ; les mots de passe sont optionnels.
+Une connexion s'exécute sous le compte avec lequel vous vous authentifiez : **root** par défaut, ou un compte à privilèges réduits (`shell`, `system`). Les clés sont la valeur par défaut, les mots de passe sont optionnels.
 
 | Key | Default | Signification |
 |-----|---------|---------|
@@ -82,9 +82,9 @@ Une connexion s'exécute sous le compte avec lequel vous vous authentifiez : **r
 
 | Key | Default | Signification |
 |-----|---------|---------|
-| `LOGIN_SHELL` | `""` | Shell de la session. Vide, utilise celui du compte par défaut. |
-| `HOME_DIR` | `""` | `HOME` de la session. Vide, utilise le répertoire du module. |
-| `EXTRA_ENV` | `""` | Environnement supplémentaire, `K=V;K2=V2`. |
+| `LOGIN_SHELL` | `""` | Shell de connexion (chemin absolu). Vide, utilise celui du compte par défaut. |
+| `HOME_DIR` | `/data/adb` | `HOME` et répertoire de départ de la session (chemin absolu). Vide, utilise le home de root (`/`). |
+| `EXTRA_ENV` | `""` | Environnement supplémentaire, `K=V;K2=V2` (nécessite `PASS_ENV` activé). |
 | `IDLE_TIMEOUT` | `0` | Déconnecte après N secondes d'inactivité. `0` désactive. |
 | `KEEPALIVE` | `0` | Envoie un keepalive toutes les N secondes. `0` désactive. |
 | `RECEIVE_WINDOW` | `""` | Taille de la fenêtre de réception de Dropbear. Vide, utilise la valeur par défaut. |
@@ -101,7 +101,9 @@ Une connexion s'exécute sous le compte avec lequel vous vous authentifiez : **r
 
 | Key | Default | Signification |
 |-----|---------|---------|
-| `HOSTKEY_TYPE` | `ed25519` | Type de host key : `ed25519`, `rsa` ou `ecdsa`. Générée au premier démarrage dans le magasin de secrets. |
+| `HOSTKEY_TYPE` | `ed25519` | Type de host key : `ed25519` ou `ecdsa`. Générée au premier démarrage dans le magasin de secrets. |
+
+> **RSA a été abandonné comme type de clé d'hôte** : ses signatures `ssh-rsa` héritées (SHA-1) ne sont pas sûres, et `ed25519` et `ECDSA` sont modernes, bien plus robustes et rapides.
 
 ## Le magasin de secrets
 
@@ -118,4 +120,4 @@ Il contient la host key, `authorized_keys` et le fichier de hachages `passwd`. V
 
 ---
 
-> _Cette documentation a été générée avec Claude (Anthropic) et est maintenue par VD171. Les corrections et améliorations sont les bienvenues ; voir [CONTRIBUTING.md](CONTRIBUTING.md)._
+> _Cette documentation a été générée avec Claude (Anthropic) et est maintenue par VD171. Les corrections et améliorations sont les bienvenues, voir [CONTRIBUTING.md](CONTRIBUTING.md)._

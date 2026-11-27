@@ -64,7 +64,7 @@ This is root, so treat it like root:
 - give the agent its **own credential**, not your personal one. A key logs in as root only (the key file sits in root-only storage, and Dropbear opens it as the account logging in); to limit the agent to a lower-privilege account (`shell`), give it a password account for `shell` instead;
 - scope the binds to networks you trust: loopback or a VPN rather than the open Internet
   (see [Configuration](CONFIGURATION.md));
-- unless the agent has a `shell` password account (above), keep password auth off; a key is revocable and never typed;
+- unless the agent has a `shell` password account (above), keep password auth off, a key is revocable and never typed;
 - you can revoke a key or stop the daemon at any time from the WebUI;
 - remember a default connection is a full root session: give the agent only the reach it needs.
 
@@ -81,4 +81,4 @@ Over USB, with no ADB: turn on USB tethering and bind to its USB address for a c
 
 ---
 
-> _This documentation was generated with Claude (Anthropic) and is maintained by VD171. Corrections and improvements are welcome; see [CONTRIBUTING.md](../CONTRIBUTING.md)._
+> _This documentation was generated with Claude (Anthropic) and is maintained by VD171. Corrections and improvements are welcome, see [CONTRIBUTING.md](../CONTRIBUTING.md)._

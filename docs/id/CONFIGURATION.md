@@ -30,9 +30,9 @@
 # Konfigurasi
 
 Pengaturan berada di `/data/adb/vddropbear/config` (disemai dari `module/common/config.default` pada
-boot pertama). **WebUI** menyunting berkas ini untuk Anda; Anda juga dapat menyuntingnya secara manual.
+boot pertama). **WebUI** menyunting berkas ini untuk Anda, Anda juga dapat menyuntingnya secara manual.
 Berkas ini di-source sebagai shell, jadi gunakan `KEY=value` tanpa spasi di sekitar `=`. Pengaturan
-bukan secret dan berada di penyimpanan device-encrypted; secret (host key, authorized keys, hash kata
+bukan secret dan berada di penyimpanan device-encrypted, secret (host key, authorized keys, hash kata
 sandi) berada di secret store, tidak pernah di sini.
 
 Terapkan perubahan dengan memulai ulang daemon (**Save & restart** di WebUI melakukan ini).
@@ -42,18 +42,18 @@ Terapkan perubahan dengan memulai ulang daemon (**Save & restart** di WebUI mela
 | Key | Default | Makna |
 |-----|---------|---------|
 | `ENABLED` | `1` | Mulai daemon saat boot. `0` menonaktifkannya sepenuhnya. |
-| `START_IN_BFU` | `0` | `0`: mulai hanya setelah first unlock (AFU); secret tetap di penyimpanan credential-encrypted (CE). `1`: mulai juga sebelum first unlock (BFU); secret berpindah ke penyimpanan device-encrypted (DE), dapat dibaca sebelum unlock. |
+| `START_IN_BFU` | `0` | `0`: mulai hanya setelah first unlock (AFU), secret tetap di penyimpanan credential-encrypted (CE). `1`: mulai juga sebelum first unlock (BFU), secret berpindah ke penyimpanan device-encrypted (DE), dapat dibaca sebelum unlock. |
 | `PORT` | `2222` | Port pendengaran default (port per-bind dapat menggantikannya di `LISTEN_ADDRESSES`). |
 
 ## Pendengaran / bind (dapat digabung)
 
-Kombinasi apa pun diperbolehkan; bind yang dipilih digabungkan. Jika Anda mengosongkan semuanya, VD
+Kombinasi apa pun diperbolehkan, bind yang dipilih digabungkan. Jika Anda mengosongkan semuanya, VD
 Dropbear melakukan bind ke loopback alih-alih setiap antarmuka.
 
 | Key | Default | Makna |
 |-----|---------|---------|
 | `LISTEN_LOOPBACK` | `1` | Dengarkan hanya di `127.0.0.1` / `::1`. |
-| `LISTEN_ALL` | `0` | Dengarkan di setiap antarmuka (`0.0.0.0` / `::`); memaparkan perangkat. |
+| `LISTEN_ALL` | `0` | Dengarkan di setiap antarmuka (`0.0.0.0` / `::`), memaparkan perangkat. |
 | `LISTEN_IPV4` | `1` | Sertakan bind IPv4. |
 | `LISTEN_IPV6` | `1` | Sertakan bind IPv6. |
 | `LISTEN_ADDRESSES` | `""` | Bind spesifik tambahan, dipisah koma: `addr` (memakai `PORT`) atau `addr:port`, IPv4 atau IPv6. |
@@ -69,7 +69,7 @@ Dropbear melakukan bind ke loopback alih-alih setiap antarmuka.
 
 ## Autentikasi
 
-Sebuah login berjalan sebagai akun yang Anda gunakan untuk autentikasi: **root** secara default, atau akun dengan privilese lebih rendah (`shell`, `system`). Kunci adalah default; kata sandi bersifat opsional.
+Sebuah login berjalan sebagai akun yang Anda gunakan untuk autentikasi: **root** secara default, atau akun dengan privilese lebih rendah (`shell`, `system`). Kunci adalah default, kata sandi bersifat opsional.
 
 | Key | Default | Makna |
 |-----|---------|---------|
@@ -81,9 +81,9 @@ Sebuah login berjalan sebagai akun yang Anda gunakan untuk autentikasi: **root**
 
 | Key | Default | Makna |
 |-----|---------|---------|
-| `LOGIN_SHELL` | `""` | Shell untuk sesi. Kosong berarti memakai default akun. |
-| `HOME_DIR` | `""` | `HOME` untuk sesi. Kosong berarti memakai direktori modul. |
-| `EXTRA_ENV` | `""` | Environment tambahan, `K=V;K2=V2`. |
+| `LOGIN_SHELL` | `""` | Shell login (jalur absolut). Kosong berarti memakai default akun. |
+| `HOME_DIR` | `/data/adb` | `HOME` dan direktori awal sesi (jalur absolut). Kosong berarti memakai home root (`/`). |
+| `EXTRA_ENV` | `""` | Environment tambahan, `K=V;K2=V2` (perlu `PASS_ENV` aktif). |
 | `IDLE_TIMEOUT` | `0` | Putuskan setelah N detik tidak aktif. `0` menonaktifkan. |
 | `KEEPALIVE` | `0` | Kirim keepalive setiap N detik. `0` menonaktifkan. |
 | `RECEIVE_WINDOW` | `""` | Ukuran receive window Dropbear. Kosong berarti memakai default. |
@@ -100,7 +100,9 @@ Sebuah login berjalan sebagai akun yang Anda gunakan untuk autentikasi: **root**
 
 | Key | Default | Makna |
 |-----|---------|---------|
-| `HOSTKEY_TYPE` | `ed25519` | Tipe host key: `ed25519`, `rsa` atau `ecdsa`. Dibuat saat start pertama ke dalam secret store. |
+| `HOSTKEY_TYPE` | `ed25519` | Tipe host key: `ed25519` atau `ecdsa`. Dibuat saat start pertama ke dalam secret store. |
+
+> **RSA dihapus sebagai tipe host key**: tanda tangan `ssh-rsa` (SHA-1) lama tidak aman, dan `ed25519` serta `ECDSA` modern, jauh lebih kuat dan cepat.
 
 ## Secret store
 
@@ -117,4 +119,4 @@ Store ini menyimpan host key, `authorized_keys`, dan berkas hash `passwd`. Lihat
 
 ---
 
-> _Dokumentasi ini dibuat dengan Claude (Anthropic) dan dikelola oleh VD171. Koreksi dan perbaikan dipersilakan; lihat [CONTRIBUTING.md](CONTRIBUTING.md)._
+> _Dokumentasi ini dibuat dengan Claude (Anthropic) dan dikelola oleh VD171. Koreksi dan perbaikan dipersilakan, lihat [CONTRIBUTING.md](CONTRIBUTING.md)._

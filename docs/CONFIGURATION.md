@@ -30,9 +30,9 @@
 # Configuration
 
 Settings live in `/data/adb/vddropbear/config` (seeded from `module/common/config.default` on first
-boot). The **WebUI** edits this file for you; you can also edit it by hand. It is sourced as shell, so
+boot). The **WebUI** edits this file for you, you can also edit it by hand. It is sourced as shell, so
 use `KEY=value` with no spaces around `=`. Settings are not secret and live on device-encrypted
-storage; secrets (host keys, authorized keys, password hashes) live in the secret store, never here.
+storage, secrets (host keys, authorized keys, password hashes) live in the secret store, never here.
 
 Apply changes by restarting the daemon (the WebUI's **Save & restart** does this).
 
@@ -46,13 +46,13 @@ Apply changes by restarting the daemon (the WebUI's **Save & restart** does this
 
 ## Listening / binds (composable)
 
-Any combination is allowed; the selected binds are merged. If you clear everything, VD Dropbear binds
+Any combination is allowed, the selected binds are merged. If you clear everything, VD Dropbear binds
 loopback rather than every interface.
 
 | Key | Default | Meaning |
 |-----|---------|---------|
 | `LISTEN_LOOPBACK` | `1` | Listen on `127.0.0.1` / `::1` only. |
-| `LISTEN_ALL` | `0` | Listen on every interface (`0.0.0.0` / `::`); exposes the device. |
+| `LISTEN_ALL` | `0` | Listen on every interface (`0.0.0.0` / `::`), exposes the device. |
 | `LISTEN_IPV4` | `1` | Include IPv4 binds. |
 | `LISTEN_IPV6` | `1` | Include IPv6 binds. |
 | `LISTEN_ADDRESSES` | `""` | Extra specific binds, comma-separated: `addr` (uses `PORT`) or `addr:port`, IPv4 or IPv6. |
@@ -82,9 +82,9 @@ A login runs as the account you authenticate as. Keys log in as **root** only: t
 
 | Key | Default | Meaning |
 |-----|---------|---------|
-| `LOGIN_SHELL` | `""` | Shell for the session. Empty uses the account default. |
-| `HOME_DIR` | `""` | `HOME` for the session. Empty uses the module directory. |
-| `EXTRA_ENV` | `""` | Extra environment, `K=V;K2=V2`. |
+| `LOGIN_SHELL` | `""` | Login shell (absolute path). Blank = account default. |
+| `HOME_DIR` | `/data/adb` | Session `HOME` and starting directory (absolute path). Blank = root's home (`/`). |
+| `EXTRA_ENV` | `""` | Extra environment, `K=V;K2=V2` (needs `PASS_ENV` on). |
 | `PASS_ENV` | `1` | Pass the daemon's environment (the platform variables it was started with, such as `BOOTCLASSPATH`) on to login sessions (Dropbear `-e`). Tools run over SSH that call into the Android framework (`am`, `content`, `pm`) need it. `0` gives sessions a bare login environment. |
 | `IDLE_TIMEOUT` | `0` | Disconnect after N idle seconds. `0` disables. |
 | `KEEPALIVE` | `0` | Send a keepalive every N seconds. `0` disables. |
@@ -102,11 +102,13 @@ A login runs as the account you authenticate as. Keys log in as **root** only: t
 
 | Key | Default | Meaning |
 |-----|---------|---------|
-| `HOSTKEY_TYPE` | `ed25519` | Host-key type: `ed25519`, `rsa` or `ecdsa`. Generated on first start into the secret store. |
+| `HOSTKEY_TYPE` | `ed25519` | Host-key type: `ed25519` or `ecdsa`. Generated on first start into the secret store. |
+
+> **RSA was dropped as a host-key type**: its legacy `ssh-rsa` (SHA-1) signatures are insecure, and `ed25519` and `ECDSA` are modern, much stronger and faster.
 
 ## The secret store
 
-Not configured here; resolved from `START_IN_BFU`:
+Not configured here, resolved from `START_IN_BFU`:
 
 - **AFU (default):** `/data/misc_ce/0/vddropbear/secret`, credential-encrypted, available only after
   you unlock the device.
@@ -119,4 +121,4 @@ It holds the host key, `authorized_keys`, and the `passwd` hash file. See
 
 ---
 
-> _This documentation was generated with Claude (Anthropic) and is maintained by VD171. Corrections and improvements are welcome; see [CONTRIBUTING.md](../CONTRIBUTING.md)._
+> _This documentation was generated with Claude (Anthropic) and is maintained by VD171. Corrections and improvements are welcome, see [CONTRIBUTING.md](../CONTRIBUTING.md)._

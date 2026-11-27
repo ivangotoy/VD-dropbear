@@ -36,7 +36,7 @@ root shell**. The security of your device therefore equals the security of this 
 configuration and credentials. Please:
 
 - **Prefer public keys over passwords.** Password login is off by default.
-- If you must use a password, use a strong one; the WebUI enforces a minimum and stores only a hash.
+- If you must use a password, use a strong one, the WebUI enforces a minimum and stores only a hash.
 - **Do not expose the port to the public Internet.** Bind to loopback or a trusted LAN, or reach it
   over a VPN / tunnel.
 - Understand the **BFU trade-off**: enabling start-before-unlock places the host key and credentials
@@ -54,7 +54,7 @@ configuration and credentials. Please:
 
 ## Supported versions
 
-Security fixes land on the latest release. The server binary tracks upstream Dropbear; upstream
+Security fixes land on the latest release. The server binary tracks upstream Dropbear, upstream
 security releases are rebuilt locally (`scripts/build.sh`) and shipped in the next release.
 
 ## Reporting a vulnerability
@@ -72,4 +72,4 @@ please also report upstream at <https://matt.ucc.asn.au/dropbear/>.
 
 ---
 
-> _This documentation was generated with Claude (Anthropic) and is maintained by VD171. Corrections and improvements are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md)._
+> _This documentation was generated with Claude (Anthropic) and is maintained by VD171. Corrections and improvements are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md)._
