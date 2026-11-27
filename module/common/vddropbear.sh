@@ -294,7 +294,7 @@ vddb_export_env() {
     # the bundled tools (scp/rsync/sftp-server) live under the module's stable bin dir
     export PATH="$VDDB_DATA/bin:${PATH:-/system/bin:/system/xbin}"
     # Public-key auth: point dropbear at the keys file only when the toggle is on.
-    # With it off, no authorized_keys is exported, so no key authenticates.
+    # With it off, the keys path below names a file that does not exist, so no key authenticates.
     if [ "$PUBKEY_AUTH" = "1" ]; then
         export DROPBEAR_AUTHKEYS="$(vddb_authkeys_link "$_sdir/authorized_keys")"
     else
