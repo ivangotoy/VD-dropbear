@@ -80,7 +80,7 @@ jobs:
           sh .github/scripts/gen-sha256.sh module
           ver="$(sed -n 's/^version=//p' module/module.prop)"
           ( cd module && zip -qr -X "../VD-dropbear-${ver}.zip" . -x '*/.gitkeep' -x 'vdlu/RELEASE.md' )
-          unzip -tq "VD-dropbear-${ver}.zip" && echo "zip ok"
+          unzip -tq "VD-dropbear-${ver}.zip" && echo "zip ok" || exit 1
           echo "ver=${ver}" >> "$GITHUB_OUTPUT"
         id: pack
 
