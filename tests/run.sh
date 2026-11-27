@@ -1760,6 +1760,7 @@ t_release_end_to_end() {
     grep -qF "$RTOKEN" "$F/argv" "$RD/out.log" && { fail "token in argv or output"; return 1; }
     sed -n 2p "$W/keys/test-2026.pem" > "$W/keyline"
     grep -qF -f "$W/keyline" "$F/argv" "$RD/out.log" && { fail "signing key in argv or output"; return 1; }
+    [ -z "$(ls -A "$RD/tmp")" ] || { fail "temp files left (token/key dir): $(ls -A "$RD/tmp" | tr '\n' ' ')"; return 1; }
     # the VDLU feed lands in the same commit as update.json, signed for this versionCode, and is the
     # zip's vdlu/baseline.json
     _g="git --git-dir=$RD/forge/owner/repo.git"
@@ -1796,6 +1797,7 @@ t_release_failure_after_publish() {
     expect_has "$o" "the VDLU feed .forgejo/vdlu-feed on main still serves the previous release" || return 1
     expect_has "$o" "\"versionCode\": $RVC," || return 1
     expect_has "$o" "\"zipUrl\": \"file://$RD/forge/owner/repo/releases/download/$RTAG/$RZIP\"" || return 1
+    [ -z "$(ls -A "$RD/tmp")" ] || { fail "(push) temp files left (token/key dir)"; return 1; }
     ANON_OK_AT=9 release_run anon || return 1
     [ "$RR" != 0 ] || { fail "(anon) exit 0"; return 1; }
     o=$(cat "$RD/out.log")
@@ -1852,7 +1854,8 @@ t_release_floor_from_published_release() {
     return 0
 }
 # G5: without the signing secret, with a key that is not the shipped key's private half, or with a
-# PEM that is no key, the release stops before creating anything on the forge.
+# PEM that is no key, the release stops before creating anything on the forge, and leaves no temp
+# file (the 0600 token header and key file go with their directory).
 t_release_vdlu_key_required() {
     release_setup || return $?
     vkey other-2026 || { fail "keygen"; return 1; }
@@ -1863,6 +1866,7 @@ t_release_vdlu_key_required() {
         [ "$RR" != 0 ] || { fail "[$_k] exit 0"; return 1; }
         grep -q 'VDLU_SIGN_KEY' "$RD/out.log" || { fail "[$_k] $(tail -n 2 "$RD/out.log" | tr '\n' ' ')"; return 1; }
         grep -q '^POST ' "$F/calls" 2>/dev/null && { fail "[$_k] a release was created"; return 1; }
+        [ -z "$(ls -A "$RD/tmp")" ] || { fail "[$_k] temp files left (token/key dir)"; return 1; }
     done
     return 0
 }
